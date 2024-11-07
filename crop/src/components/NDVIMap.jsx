@@ -10,6 +10,7 @@ function NDVIMap() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [tileUrl, setTileUrl] = useState(null);
+  const [legend, setLegend] = useState(null);
 
   // Geocoding function to get coordinates from place name
   const getCoordinatesFromPlace = async () => {
@@ -46,6 +47,7 @@ function NDVIMap() {
 
       // Set the NDVI tile URL from the response
       setTileUrl(response.data.tile_url);
+      setLegend(response.data.legend);
     } catch (error) {
       console.error('Error fetching NDVI data:', error);
     }
@@ -64,47 +66,133 @@ function NDVIMap() {
     }
     return null;
   }
+  function ZoomToArea() {
+    const map = useMap();
+
+    if (coordinates.lonMin && coordinates.latMin && coordinates.lonMax && coordinates.latMax) {
+      const bounds = [
+        [coordinates.latMin, coordinates.lonMin],
+        [coordinates.latMax, coordinates.lonMax],
+      ];
+      map.fitBounds(bounds); 
+    }
+
+    return null;
+  }
 
   return (
-    <div>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Place Name:</label>
-          <input type="text" value={place} onChange={(e) => setPlace(e.target.value)} required />
-          <button type="button" onClick={getCoordinatesFromPlace}>Get Coordinates</button>
+    <div className="p-6 max-w-4xl mx-auto bg-slate-200 shadow-md rounded-lg">
+      <form onSubmit={handleSubmit} className="space-y-4 mb-10">
+        <div className="flex flex-col">
+          <label className="text-gray-700 font-semibold">Place Name:</label>
+          <input
+            type="text"
+            value={place}
+            onChange={(e) => setPlace(e.target.value)}
+            required
+            className="p-2 border border-gray-300 rounded-lg"
+          />
+          <button
+            type="button"
+            onClick={getCoordinatesFromPlace}
+            className="mt-2 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-300"
+          >
+            Get Coordinates
+          </button>
         </div>
-        <div>
-          <label>Lon Min:</label>
-          <input type="text" value={coordinates.lonMin} readOnly />
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col">
+            <label className="text-gray-700 font-semibold">Lon Min:</label>
+            <input
+              type="text"
+              value={coordinates.lonMin}
+              readOnly
+              className="p-2 border border-gray-300 rounded-lg bg-gray-100"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-gray-700 font-semibold">Lat Min:</label>
+            <input
+              type="text"
+              value={coordinates.latMin}
+              readOnly
+              className="p-2 border border-gray-300 rounded-lg bg-gray-100"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-gray-700 font-semibold">Lon Max:</label>
+            <input
+              type="text"
+              value={coordinates.lonMax}
+              readOnly
+              className="p-2 border border-gray-300 rounded-lg bg-gray-100"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-gray-700 font-semibold">Lat Max:</label>
+            <input
+              type="text"
+              value={coordinates.latMax}
+              readOnly
+              className="p-2 border border-gray-300 rounded-lg bg-gray-100"
+            />
+          </div>
         </div>
-        <div>
-          <label>Lat Min:</label>
-          <input type="text" value={coordinates.latMin} readOnly />
+        <h1 className="text-sm font-bold text-gray-800 mb-6">Please select the date range:</h1>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col">
+            <label className="text-gray-700 font-semibold">Start Date:</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              required
+              className="p-2 border border-gray-300 rounded-lg"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-gray-700 font-semibold">End Date:</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              required
+              className="p-2 border border-gray-300 rounded-lg"
+            />
+          </div>
         </div>
-        <div>
-          <label>Lon Max:</label>
-          <input type="text" value={coordinates.lonMax} readOnly />
-        </div>
-        <div>
-          <label>Lat Max:</label>
-          <input type="text" value={coordinates.latMax} readOnly />
-        </div>
-        <div>
-          <label>Start Date:</label>
-          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
-        </div>
-        <div>
-          <label>End Date:</label>
-          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
-        </div>
-        <button type="submit">Get NDVI Data</button>
+
+        <button
+          type="submit"
+          className="w-full mt-4 p-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition duration-300"
+        >
+          Get NDVI Data
+        </button>
       </form>
 
-      <MapContainer center={[-1.0, 37.0]} zoom={10} style={{ height: '500px', width: '100%' }}>
+      {legend && (
+        <div className="mt-6 p-4 bg-gray-100 rounded-lg shadow-md">
+          <h3 className="text-xl font-semibold">NDVI Legend</h3>
+          <ul className="space-y-2 mt-4">
+            {Object.entries(legend).map(([color, description]) => (
+              <li key={color} className="flex items-center space-x-2">
+                <span
+                  className="w-4 h-4 inline-block"
+                  style={{ backgroundColor: color.toLowerCase() }}
+                ></span>
+                <span className="text-gray-700">{description}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <MapContainer center={[-1.0, 37.0]} zoom={10} style={{ height: '500px', width: '100%' }} className="mt-6">
         <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
           attribution="&copy; OpenStreetMap contributors"
         />
+        <ZoomToArea />
         {tileUrl && <NDVILayer />}
       </MapContainer>
     </div>

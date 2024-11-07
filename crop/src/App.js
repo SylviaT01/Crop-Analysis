@@ -9,9 +9,9 @@ function App() {
   return (
     <Router>
       <div className="App">
-        <header>
+        {/* <header>
           <h1>NDVI Analysis Tool</h1>
-        </header>
+        </header> */}
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/ndvi-map" element={<NDVIMap />} />

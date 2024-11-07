@@ -25,7 +25,7 @@
             <meta name="viewport" content="width=device-width,
                 initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
             <style>
-                #map_8e850ffa61c8e8d0eb1c5afb954d812a {
+                #map_4cdebbaf0d911fd17f18932abccc4d17 {
                     position: relative;
                     width: 100.0%;
                     height: 100.0%;
@@ -39,28 +39,28 @@
 <body>
     
     
-     <div style="position: fixed; 
-                 bottom: 50px; left: 50px; width: 150px; height: 90px; 
-                 background-color: white; border:2px solid grey; z-index:9999; font-size:14px;">
-     &nbsp; <strong>NDVI Legend</strong> <br>
-     &nbsp; <span style="background-color:blue; width:20px; height:10px; display:inline-block;"></span> Low (e.g., water) <br>
-     &nbsp; <span style="background-color:white; width:20px; height:10px; display:inline-block; border:1px solid grey;"></span> Moderate (e.g., sparse vegetation) <br>
-     &nbsp; <span style="background-color:green; width:20px; height:10px; display:inline-block;"></span> High (e.g., dense vegetation) <br>
-      </div>
-     
+         <div style="position: fixed; 
+                     bottom: 50px; left: 50px; width: 150px; height: 90px; 
+                     background-color: white; border:2px solid grey; z-index:9999; font-size:14px;">
+         &nbsp; <strong>NDVI Legend</strong> <br>
+         &nbsp; <span style="background-color:blue; width:20px; height:10px; display:inline-block;"></span> Low (e.g., water) <br>
+         &nbsp; <span style="background-color:white; width: 20px; height:10px; display:inline-block;"></span> Moderate (e.g., bare soil) <br>
+         &nbsp; <span style="background-color:green; width:20px; height:10px; display:inline-block;"></span> High (e.g., dense vegetation) <br>
+         </div>
+         
     
-            <div class="folium-map" id="map_8e850ffa61c8e8d0eb1c5afb954d812a" ></div>
+            <div class="folium-map" id="map_4cdebbaf0d911fd17f18932abccc4d17" ></div>
         
 </body>
 <script>
     
     
-            var map_8e850ffa61c8e8d0eb1c5afb954d812a = L.map(
-                "map_8e850ffa61c8e8d0eb1c5afb954d812a",
+            var map_4cdebbaf0d911fd17f18932abccc4d17 = L.map(
+                "map_4cdebbaf0d911fd17f18932abccc4d17",
                 {
-                    center: [1.0, 38.0],
+                    center: [-0.8316897, 37.06390905],
                     crs: L.CRS.EPSG3857,
-                    zoom: 6,
+                    zoom: 8,
                     zoomControl: true,
                     preferCanvas: false,
                 }
@@ -70,22 +70,22 @@
 
         
     
-            var tile_layer_8cf3f31bf08517b9924a62916e5922df = L.tileLayer(
+            var tile_layer_a40a4dfbfba1acc66320c91d62b9d1f0 = L.tileLayer(
                 "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
                 {"attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors", "detectRetina": false, "maxNativeZoom": 19, "maxZoom": 19, "minZoom": 0, "noWrap": false, "opacity": 1, "subdomains": "abc", "tms": false}
             );
         
     
-            tile_layer_8cf3f31bf08517b9924a62916e5922df.addTo(map_8e850ffa61c8e8d0eb1c5afb954d812a);
+            tile_layer_a40a4dfbfba1acc66320c91d62b9d1f0.addTo(map_4cdebbaf0d911fd17f18932abccc4d17);
         
     
-            var tile_layer_943d1efe0c1375ba52c24e2923b9be23 = L.tileLayer(
-                "https://earthengine.googleapis.com/v1/projects/ee-cropanalysisgee/maps/a03c24908b1cc0fa1cafef54e2ffb038-d02d0d656e4876b666baf75f226f4f3a/tiles/{z}/{x}/{y}",
+            var tile_layer_9547a1eeee65385fa24faf3d6c44a0db = L.tileLayer(
+                "https://earthengine.googleapis.com/v1/projects/ee-cropanalysisgee/maps/3b1184b58e17860d08b4791b5f074f11-5844aee054ff4a29b0d53fe8bc489861/tiles/{z}/{x}/{y}",
                 {"attribution": "Google Earth Engine", "detectRetina": false, "maxZoom": 18, "minZoom": 0, "noWrap": false, "opacity": 1, "subdomains": "abc", "tms": false}
             );
         
     
-            tile_layer_943d1efe0c1375ba52c24e2923b9be23.addTo(map_8e850ffa61c8e8d0eb1c5afb954d812a);
+            tile_layer_9547a1eeee65385fa24faf3d6c44a0db.addTo(map_4cdebbaf0d911fd17f18932abccc4d17);
         
 </script>
 </html>
