@@ -3,14 +3,25 @@ import { Link } from 'react-router-dom';
 
 function Home() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-      <h2 className="text-3xl font-bold text-center text-green-600 mb-4">Welcome to the NDVI Analysis Tool</h2>
-      <p className="text-lg text-center text-gray-700 mb-6">Analyze vegetation health and conditions using NDVI data.</p>
-      <Link to="/ndvi-map">
-        <button className="bg-green-600 text-white py-2 px-6 rounded-lg hover:bg-green-700 transition duration-300">
-          Start NDVI Analysis
-        </button>
-      </Link>
+    <div className="relative flex flex-col items-center justify-center min-h-screen bg-gray-100">
+      <video
+        autoPlay
+        loop
+        muted
+        className="absolute inset-0 w-full h-full object-cover"
+      >
+        <source src="https://videocdn.cdnpk.net/videos/40acdff1-c51b-4d55-b13a-68950ef91166/horizontal/previews/clear/large.mp4?token=exp=1731017809~hmac=a115a14ca6d0d08aa0b105c8573a8e499811b1433c2c77d866fdd2cdb0b2745a" type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+      <div className="relative z-10 text-center text-white">
+        <h2 className="text-3xl font-bold text-green-600 mb-4">Welcome to the NDVI Analysis Tool</h2>
+        <p className="text-lg text-gray-200 mb-6">Analyze vegetation health and conditions using NDVI data.</p>
+        <Link to="/ndvi-map">
+          <button className="bg-green-600 text-white py-2 px-6 rounded-lg hover:bg-green-700 transition duration-300">
+            Start NDVI Analysis
+          </button>
+        </Link>
+      </div>
     </div>
   );
 }
