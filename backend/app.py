@@ -119,27 +119,27 @@ def get_ndvi_for_area():
         .filterDate(start_date, end_date) \
         .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 5))  
 
-    # Get the first image in the filtered collection
-    image = image_collection.sort('system:time_start').first()  
+    # Create a mosaic of the NDVI images
+    ndvi_collection = image_collection.map(lambda image: 
+        image.select('B8').subtract(image.select('B4')).divide(image.select('B8').add(image.select('B4'))).rename('NDVI')
+    )
 
-    # Check if the image exists (i.e., collection is not empty)
-    image_exists = image.getInfo() is not None
+    # Create a mosaic from the NDVI collection
+    ndvi_mosaic = ndvi_collection.mean().clip(aoi)
 
-    if not image_exists:
+    # Check if the mosaic exists
+    ndvi_mosaic_exists = ndvi_mosaic.getInfo() is not None
+
+    if not ndvi_mosaic_exists:
         return jsonify({
-            'error': 'No images available for the given date range and area with acceptable cloud cover.'
+            'error': 'No NDVI data available for the given date range and area with acceptable cloud cover.'
         }), 404
 
-    # Select Red and NIR bands for NDVI calculation
-    nir_band = image.select('B8')
-    red_band = image.select('B4')
-    ndvi = nir_band.subtract(red_band).divide(nir_band.add(red_band)).rename('NDVI')
-
-    # Define a color palette that clearly distinguishes water bodies
-    ndvi_params = ndvi.getMapId({
-        'min': -0.5,  
-        'max': 1, 
-        'palette': ['blue', 'cyan', 'yellow', 'green']  
+    # Define a color palette for NDVI visualization
+    ndvi_params = ndvi_mosaic.getMapId({
+        'min': -0.5,
+        'max': 1,
+        'palette': ['blue', 'cyan', 'yellow', 'green']
     })
 
     # Define the legend for NDVI with ranges

@@ -71,14 +71,27 @@ function NDVIMap() {
       console.error('Error fetching NDVI value:', error);
     }
   };
-  
   const handlePolygonCreate = (e) => {
     const layer = e.layer;
-    const latLngs = layer.getLatLngs()[0].map(latLng => [latLng.lat, latLng.lng]);
-    console.log('Selected Area Coordinates:', latLngs);
-    setSelectedArea(latLngs); 
-    setShowDateModal(true); 
+
+    // Check if the created layer is a polygon and handle it
+    if (layer instanceof L.Polygon || layer instanceof L.Polyline) {
+      const latLngs = layer.getLatLngs()[0].map(latLng => [latLng.lat, latLng.lng]);
+      console.log('Selected Area Coordinates (Polygon):', latLngs);
+      setSelectedArea(latLngs);
+      setShowDateModal(true);
+    }
+    // Check if it's a marker or circle marker and handle it
+    else if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
+      const latLng = layer.getLatLng();
+      console.log('Selected Location Coordinates (Marker/CircleMarker):', [latLng.lat, latLng.lng]);
+      setSelectedArea([[latLng.lat, latLng.lng]]); // You can modify this based on how you want to store the data
+      setShowDateModal(true);
+    } else {
+      console.error("Unrecognized layer type.");
+    }
   };
+
 
   const handleDateSubmit = async () => {
     if (!startDate || !endDate) {
@@ -89,9 +102,9 @@ function NDVIMap() {
 
     const confirmView = window.confirm('Do you want to view NDVI for the selected area?');
     if (confirmView) {
-      
-      const coordinates = selectedArea.map(([lat, lng]) => [lng, lat]); 
-      console.log('Sending coordinates:', coordinates); 
+
+      const coordinates = selectedArea.map(([lat, lng]) => [lng, lat]);
+      console.log('Sending coordinates:', coordinates);
 
       try {
         const response = await axios.post('http://127.0.0.1:5000/get-ndvi-for-area', {
@@ -102,7 +115,7 @@ function NDVIMap() {
 
         if (response.data.tile_url) {
           setTileUrl(response.data.tile_url);
-          setLegend(response.data.legend); 
+          setLegend(response.data.legend);
         } else {
           alert('No NDVI data available for the selected area and date range.');
         }
@@ -300,20 +313,26 @@ function NDVIMap() {
             attribution="&copy; Google Maps"
           />
           <FeatureGroup>
-            <EditControl position="topright" onCreated={handlePolygonCreate} />
+            <EditControl position="topright" onCreated={handlePolygonCreate} draw={{
+              polyline: false, 
+              polygon: true,   
+              rectangle: false, 
+              circle: false,  
+              marker: false,  
+            }} />
           </FeatureGroup>
           <ZoomToArea />
           {tileUrl && <NDVILayer />}
           {popupPosition && ndviValue && (
-            <Popup 
-            position={popupPosition} 
-            onClose={() => {
-              setPopupPosition(null);
-              setNdviValue(null);
-            }}
-          >
-            NDVI value at this location: <strong>{ndviValue}</strong>
-          </Popup>
+            <Popup
+              position={popupPosition}
+              onClose={() => {
+                setPopupPosition(null);
+                setNdviValue(null);
+              }}
+            >
+              NDVI value at this location: <strong>{ndviValue}</strong>
+            </Popup>
           )}
         </MapContainer>
       </div>
