@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import backgroundVideo from '../assets/backgroundVideo.mp4'
 
 function Home() {
   return (
@@ -10,7 +11,7 @@ function Home() {
         muted
         className="absolute inset-0 w-full h-full object-cover"
       >
-        <source src="https://videocdn.cdnpk.net/videos/40acdff1-c51b-4d55-b13a-68950ef91166/horizontal/previews/clear/large.mp4?token=exp=1731017809~hmac=a115a14ca6d0d08aa0b105c8573a8e499811b1433c2c77d866fdd2cdb0b2745a" type="video/mp4" />
+        <source src={backgroundVideo} type="video/mp4" />
         Your browser does not support the video tag.
       </video>
       <div className="relative z-10 text-center text-white">

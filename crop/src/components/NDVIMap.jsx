@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import L from 'leaflet';
-import { MapContainer, TileLayer, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap, Popup, FeatureGroup } from 'react-leaflet';
+import { EditControl } from 'react-leaflet-draw';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet-draw/dist/leaflet.draw.css';
+import backgroundVideo from '../assets/backgroundVideo.mp4';
 
 function NDVIMap() {
   const [place, setPlace] = useState('');
@@ -11,8 +14,11 @@ function NDVIMap() {
   const [endDate, setEndDate] = useState('');
   const [tileUrl, setTileUrl] = useState(null);
   const [legend, setLegend] = useState(null);
+  const [ndviValue, setNdviValue] = useState(null);
+  const [popupPosition, setPopupPosition] = useState(null);
+  const [selectedArea, setSelectedArea] = useState(null);
+  const [showDateModal, setShowDateModal] = useState(false);
 
-  // Geocoding function to get coordinates from place name
   const getCoordinatesFromPlace = async () => {
     try {
       const geocodeResponse = await axios.get(
@@ -36,16 +42,13 @@ function NDVIMap() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     try {
-      // Send a POST request to the backend
       const response = await axios.post('http://127.0.0.1:5000/get-ndvi', {
         coordinates: [coordinates.lonMin, coordinates.latMin, coordinates.lonMax, coordinates.latMax],
         start_date: startDate,
         end_date: endDate,
       });
 
-      // Set the NDVI tile URL from the response
       setTileUrl(response.data.tile_url);
       setLegend(response.data.legend);
     } catch (error) {
@@ -53,15 +56,72 @@ function NDVIMap() {
     }
   };
 
-  // Custom component for adding NDVI layer to the map when `tileUrl` changes
+  const handleMapClick = async (event) => {
+    const { lat, lng } = event.latlng;
+    try {
+      const response = await axios.post('http://127.0.0.1:5000/get-ndvi-value', {
+        latitude: lat,
+        longitude: lng,
+        start_date: startDate,
+        end_date: endDate,
+      });
+      setNdviValue(response.data.ndvi_value);
+      setPopupPosition({ lat, lng });
+    } catch (error) {
+      console.error('Error fetching NDVI value:', error);
+    }
+  };
+  
+  const handlePolygonCreate = (e) => {
+    const layer = e.layer;
+    const latLngs = layer.getLatLngs()[0].map(latLng => [latLng.lat, latLng.lng]);
+    console.log('Selected Area Coordinates:', latLngs);
+    setSelectedArea(latLngs); 
+    setShowDateModal(true); 
+  };
+
+  const handleDateSubmit = async () => {
+    if (!startDate || !endDate) {
+      alert('Please select both start and end dates.');
+      return;
+    }
+    setShowDateModal(false);
+
+    const confirmView = window.confirm('Do you want to view NDVI for the selected area?');
+    if (confirmView) {
+      
+      const coordinates = selectedArea.map(([lat, lng]) => [lng, lat]); 
+      console.log('Sending coordinates:', coordinates); 
+
+      try {
+        const response = await axios.post('http://127.0.0.1:5000/get-ndvi-for-area', {
+          coordinates: coordinates,
+          start_date: startDate,
+          end_date: endDate,
+        });
+
+        if (response.data.tile_url) {
+          setTileUrl(response.data.tile_url);
+          setLegend(response.data.legend); 
+        } else {
+          alert('No NDVI data available for the selected area and date range.');
+        }
+      } catch (error) {
+        console.error('Error fetching NDVI data for area:', error);
+        alert('There was an error fetching NDVI data. Please try again later.');
+      }
+    }
+  };
+
+
   function NDVILayer() {
     const map = useMap();
-
     if (tileUrl) {
       const ndviLayer = L.tileLayer(tileUrl, {
         attribution: 'Google Earth Engine',
       });
       ndviLayer.addTo(map);
+      map.on('click', handleMapClick);
       return () => map.removeLayer(ndviLayer);
     }
     return null;
@@ -69,7 +129,6 @@ function NDVIMap() {
 
   function ZoomToArea() {
     const map = useMap();
-
     if (coordinates.lonMin && coordinates.latMin && coordinates.lonMax && coordinates.latMax) {
       const bounds = [
         [coordinates.latMin, coordinates.lonMin],
@@ -77,24 +136,17 @@ function NDVIMap() {
       ];
       map.fitBounds(bounds);
     }
-
     return null;
   }
 
   return (
     <div className="relative">
-      <video
-        autoPlay
-        loop
-        muted
-        className="absolute inset-0 w-full h-full object-cover"
-      >
-        <source src="https://videocdn.cdnpk.net/videos/40acdff1-c51b-4d55-b13a-68950ef91166/horizontal/previews/clear/large.mp4?token=exp=1731018023~hmac=89c2ffbdfdd39a92693c514b0c812c0c2ab2a284b5300ddef2b62360a1180a4d" type="video/mp4" />
+      <video autoPlay loop muted className="absolute inset-0 w-full h-full object-cover">
+        <source src={backgroundVideo} type="video/mp4" />
         Your browser does not support the video tag.
       </video>
 
-      {/* Form and Map content */}
-      <div className="relative z-10 p-6 max-w-4xl mx-auto bg-slate-200/20 shadow-md rounded-lg">
+      <div className="relative z-10 p-6 max-w-4xl mx-auto bg-s late-200/20 shadow-md rounded-lg">
         <form onSubmit={handleSubmit} className="space-y-4 mb-10">
           <div className="flex flex-col">
             <label className="text-white/70 font-semibold">Place Name:</label>
@@ -152,7 +204,6 @@ function NDVIMap() {
               />
             </div>
           </div>
-
           <h1 className="text-sm font-bold text-white/70 mb-6">Please select the date range:</h1>
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col">
@@ -201,13 +252,69 @@ function NDVIMap() {
             </ul>
           </div>
         )}
+        {showDateModal && (
+          <div className="fixed inset-0 bg-gray-600/50 flex justify-center items-center">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-96">
+              <h3 className="text-xl font-semibold">Select Date Range</h3>
+              <div className="space-y-4 mt-4">
+                <div className="flex flex-col">
+                  <label className="font-semibold">Start Date:</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="p-2 border border-gray-300 rounded-lg"
+                  />
+                </div>
+                <div className="flex flex-col">
+                  <label className="font-semibold">End Date:</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="p-2 border border-gray-300 rounded-lg"
+                  />
+                </div>
+              </div>
+              <div className="mt-4 flex justify-between">
+                <button
+                  onClick={handleDateSubmit}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg"
+                >
+                  Submit
+                </button>
+                <button
+                  onClick={() => setShowDateModal(false)}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <MapContainer center={[-1.0, 37.0]} zoom={10} style={{ height: '500px', width: '100%' }} className="mt-6">
           <TileLayer
             url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
-            attribution="&copy; OpenStreetMap contributors"
+            attribution="&copy; Google Maps"
           />
+          <FeatureGroup>
+            <EditControl position="topright" onCreated={handlePolygonCreate} />
+          </FeatureGroup>
           <ZoomToArea />
           {tileUrl && <NDVILayer />}
+          {popupPosition && ndviValue && (
+            <Popup 
+            position={popupPosition} 
+            onClose={() => {
+              setPopupPosition(null);
+              setNdviValue(null);
+            }}
+          >
+            NDVI value at this location: <strong>{ndviValue}</strong>
+          </Popup>
+          )}
         </MapContainer>
       </div>
     </div>
