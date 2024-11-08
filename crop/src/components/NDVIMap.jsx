@@ -71,6 +71,7 @@ function NDVIMap() {
       console.error('Error fetching NDVI value:', error);
     }
   };
+
   const handlePolygonCreate = (e) => {
     const layer = e.layer;
 
