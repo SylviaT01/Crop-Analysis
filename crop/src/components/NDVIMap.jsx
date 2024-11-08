@@ -253,8 +253,8 @@ function NDVIMap() {
           </div>
         )}
         {showDateModal && (
-          <div className="fixed inset-0 bg-gray-600/50 flex justify-center items-center">
-            <div className="bg-white p-6 rounded-lg shadow-lg w-96">
+          <div className="fixed inset-0 bg-gray-600/50 flex justify-center items-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-96 z-50">
               <h3 className="text-xl font-semibold">Select Date Range</h3>
               <div className="space-y-4 mt-4">
                 <div className="flex flex-col">
@@ -294,7 +294,7 @@ function NDVIMap() {
           </div>
         )}
 
-        <MapContainer center={[-1.0, 37.0]} zoom={10} style={{ height: '500px', width: '100%' }} className="mt-6">
+        <MapContainer center={[-1.0, 37.0]} zoom={10} style={{ height: '500px', width: '100%', zIndex: 1 }} className="mt-6">
           <TileLayer
             url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
             attribution="&copy; Google Maps"

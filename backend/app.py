@@ -117,7 +117,7 @@ def get_ndvi_for_area():
     image_collection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') \
         .filterBounds(aoi) \
         .filterDate(start_date, end_date) \
-        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 10))  
+        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 5))  
 
     # Get the first image in the filtered collection
     image = image_collection.sort('system:time_start').first()  
