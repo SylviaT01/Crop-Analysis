@@ -6,6 +6,22 @@ import { EditControl } from 'react-leaflet-draw';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import backgroundVideo from '../assets/backgroundVideo.mp4';
+import { Line } from 'react-chartjs-2';
+// import { useMap } from 'react-leaflet';
+import {
+  Chart as ChartJS,
+  LineElement,
+  PointElement,
+  LinearScale,
+  Title,
+  Tooltip,
+  Legend,
+  CategoryScale,
+} from 'chart.js';
+
+// Register the components
+ChartJS.register(LineElement, PointElement, LinearScale, Title, Tooltip, Legend, CategoryScale);
+
 
 function NDVIMap() {
   const [place, setPlace] = useState('');
@@ -18,6 +34,9 @@ function NDVIMap() {
   const [popupPosition, setPopupPosition] = useState(null);
   const [selectedArea, setSelectedArea] = useState(null);
   const [showDateModal, setShowDateModal] = useState(false);
+  // const map = useMap();
+  const [ndviData, setNdviData] = useState({});
+
 
   const getCoordinatesFromPlace = async () => {
     try {
@@ -126,7 +145,51 @@ function NDVIMap() {
       }
     }
   };
+  const fetchNDVIForYearRange = async () => {
+    if (!startDate || !endDate) {
+      alert('Please select both start and end dates.');
+      return;
+    }
 
+    const coordinates = selectedArea.map(([lat, lng]) => [lng, lat]);
+    console.log('Sending coordinates for year range:', coordinates);
+
+    try {
+      const response = await axios.post('http://127.0.0.1:5000/get-ndvi-for-year-range', {
+        coordinates: coordinates,
+        start_date: startDate,
+        end_date: endDate,
+      });
+
+      console.log('NDVI Data Response:', response.data);
+      if (response.data.ndvi_data) {
+        setNdviData(response.data.ndvi_data);
+      } else {
+        alert('No NDVI data available for the selected area and date range.');
+      }
+    } catch (error) {
+      console.error('Error fetching NDVI data for year range:', error);
+      alert('There was an error fetching NDVI data. Please try again later.');
+    }
+  };
+
+
+  const chartData = {
+    labels: Object.keys(ndviData), // Years
+    datasets: [
+      {
+        label: 'Mean NDVI',
+        data: Object.values(ndviData), // NDVI values
+        borderColor: 'rgba(75, 192, 192, 1)', // Solid color for the line
+        backgroundColor: 'rgba(75, 192, 192, 0.5)', // Adjust opacity here (0.5 is semi-transparent)
+        borderWidth: 1,
+      },
+    ],
+  };
+
+  
+  console.log('NDVI Data:', ndviData);
+  console.log('Chart Data:', chartData); // Log the chart data
 
   function NDVILayer() {
     const map = useMap();
@@ -297,6 +360,7 @@ function NDVIMap() {
                 >
                   Submit
                 </button>
+                <button onClick={fetchNDVIForYearRange}>Fetch NDVI for Year Range</button>
                 <button
                   onClick={() => setShowDateModal(false)}
                   className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg"
@@ -315,11 +379,11 @@ function NDVIMap() {
           />
           <FeatureGroup>
             <EditControl position="topright" onCreated={handlePolygonCreate} draw={{
-              polyline: false, 
-              polygon: true,   
-              rectangle: false, 
-              circle: false,  
-              marker: false,  
+              polyline: false,
+              polygon: true,
+              rectangle: false,
+              circle: false,
+              marker: false,
             }} />
           </FeatureGroup>
           <ZoomToArea />
@@ -336,7 +400,30 @@ function NDVIMap() {
             </Popup>
           )}
         </MapContainer>
+        {Object.keys(ndviData).length > 0 && (
+          <div style={{ width: '100%', height: '400px', backgroundColor: 'white', padding: '10px', borderRadius: '5px', boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)' }}>
+          <h2>NDVI Over Time</h2>
+          <Line data={chartData} options={{
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: 'NDVI',
+                },
+              },
+              x: {
+                title: {
+                  display: true,
+                  text: 'Year',
+                },
+              },
+            },
+          }} />
+        </div>
+        )}
       </div>
+
     </div>
   );
 }

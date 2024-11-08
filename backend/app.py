@@ -157,6 +157,53 @@ def get_ndvi_for_area():
         'legend': legend
     })
 
+# @app.route('/get-ndvi-for-year-range', methods=['POST'])
+# def get_ndvi_for_year_range():
+#     # Extract the user input from the request
+#     data = request.json
+#     coordinates = data.get('coordinates') 
+#     start_date = data.get('start_date')
+#     end_date = data.get('end_date')
+
+#     # Define area of interest (from user-provided polygon coordinates)
+#     aoi = ee.Geometry.Polygon(coordinates)
+
+#     # Parse the start and end years
+#     start_year = int(start_date.split('-')[0])
+#     end_year = int(end_date.split('-')[0])
+
+#     ndvi_data = {}
+
+#     for year in range(start_year, end_year + 1):
+#         year_start = f"{year}-01-01"
+#         year_end = f"{year}-12-31"
+
+#         # Load and filter Sentinel-2 image collection
+#         image_collection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') \
+#             .filterBounds(aoi) \
+#             .filterDate(year_start, year_end) \
+#             .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 10))  
+
+#         # Calculate the NDVI for the given year
+#         ndvi_collection = image_collection.map(lambda image: 
+#             image.select('B8').subtract(image.select('B4')).divide(image.select('B8').add(image.select('B4'))).rename('NDVI')
+#         )
+
+#         # Create a mosaic from the NDVI collection and calculate mean NDVI
+#         ndvi_mosaic = ndvi_collection.mean().clip(aoi)
+
+#         # Get the NDVI mean value for the year
+#         mean_ndvi = ndvi_mosaic.reduceRegion(
+#             reducer=ee.Reducer.mean(),
+#             geometry=aoi,
+#             scale=30,
+#             maxPixels=1e8
+#         ).get('NDVI').getInfo()
+
+#         ndvi_data[year] = mean_ndvi
+
+#     return jsonify({'ndvi_data': ndvi_data})
+
 @app.route('/get-ndvi-for-year-range', methods=['POST'])
 def get_ndvi_for_year_range():
     # Extract the user input from the request
@@ -178,33 +225,30 @@ def get_ndvi_for_year_range():
         year_start = f"{year}-01-01"
         year_end = f"{year}-12-31"
 
-        # Load and filter Sentinel-2 image collection
+    # Load and filter Sentinel-2 image collection
         image_collection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') \
             .filterBounds(aoi) \
             .filterDate(year_start, year_end) \
-            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 10))  
+            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 5))  
 
-        # Calculate the NDVI for the given year
+    # Calculate the NDVI for the given year
         ndvi_collection = image_collection.map(lambda image: 
             image.select('B8').subtract(image.select('B4')).divide(image.select('B8').add(image.select('B4'))).rename('NDVI')
         )
 
-        # Create a mosaic from the NDVI collection and calculate mean NDVI
-        ndvi_mosaic = ndvi_collection.mean().clip(aoi)
-
-        # Get the NDVI mean value for the year
-        mean_ndvi = ndvi_mosaic.reduceRegion(
+    # Create a mean NDVI for the year
+        mean_ndvi = ndvi_collection.mean().reduceRegion(
             reducer=ee.Reducer.mean(),
             geometry=aoi,
             scale=30,
             maxPixels=1e8
         ).get('NDVI').getInfo()
 
-        ndvi_data[year] = mean_ndvi
+    # Store the mean NDVI for the year
+        ndvi_data[year] = mean_ndvi if mean_ndvi is not None else None
 
+    print('Final NDVI Data:', ndvi_data)
     return jsonify({'ndvi_data': ndvi_data})
-
-    
 
 if __name__ == '__main__':
     app.run(debug=True)
