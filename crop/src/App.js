@@ -14,7 +14,7 @@ function App() {
         </header> */}
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/ndvi-map" element={<NDVIMap />} />
+          <Route path="/indices-map" element={<NDVIMap />} />
         </Routes>
       </div>
     </Router>
