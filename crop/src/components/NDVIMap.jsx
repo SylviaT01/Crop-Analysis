@@ -67,7 +67,7 @@ function NDVIMap() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post('http://127.0.0.1:5000/get-ndvi', {
+      const response = await axios.post('https://backend-crop-analysis-1.onrender.com/get-ndvi', {
         coordinates: [coordinates.lonMin, coordinates.latMin, coordinates.lonMax, coordinates.latMax],
         start_date: startDate,
         end_date: endDate,
@@ -85,7 +85,7 @@ function NDVIMap() {
   const handleMapClick = async (event) => {
     const { lat, lng } = event.latlng;
     try {
-      const response = await axios.post('http://127.0.0.1:5000/get-ndvi-value', {
+      const response = await axios.post('https://backend-crop-analysis-1.onrender.com/get-ndvi-value', {
         latitude: lat,
         longitude: lng,
         start_date: startDate,
@@ -132,7 +132,7 @@ function NDVIMap() {
       console.log('Sending coordinates:', coordinates);
 
       try {
-        const response = await axios.post('http://127.0.0.1:5000/get-ndvi-for-area', {
+        const response = await axios.post('https://backend-crop-analysis-1.onrender.com/get-ndvi-for-area', {
           coordinates: coordinates,
           start_date: startDate,
           end_date: endDate,
@@ -167,33 +167,33 @@ function NDVIMap() {
 
 
 
-  const fetchNDVIForYearRange = async () => {
-    if (!startDate || !endDate) {
-      alert('Please select both start and end dates.');
-      return;
-    }
+  // const fetchNDVIForYearRange = async () => {
+  //   if (!startDate || !endDate) {
+  //     alert('Please select both start and end dates.');
+  //     return;
+  //   }
 
-    const coordinates = selectedArea.map(([lat, lng]) => [lng, lat]);
-    console.log('Sending coordinates for year range:', coordinates);
+  //   const coordinates = selectedArea.map(([lat, lng]) => [lng, lat]);
+  //   console.log('Sending coordinates for year range:', coordinates);
 
-    try {
-      const response = await axios.post('http://127.0.0.1:5000/get-ndvi-for-year-range', {
-        coordinates: coordinates,
-        start_date: startDate,
-        end_date: endDate,
-      });
+  //   try {
+  //     const response = await axios.post('https://backend-crop-analysis-1.onrender.com/get-ndvi-for-year-range', {
+  //       coordinates: coordinates,
+  //       start_date: startDate,
+  //       end_date: endDate,
+  //     });
 
-      console.log('NDVI Data Response:', response.data);
-      if (response.data.ndvi_data) {
-        setNdviData(response.data.ndvi_data);
-      } else {
-        alert('No NDVI data available for the selected area and date range.');
-      }
-    } catch (error) {
-      console.error('Error fetching NDVI data for year range:', error);
-      alert('There was an error fetching NDVI data. Please try again later.');
-    }
-  };
+  //     console.log('NDVI Data Response:', response.data);
+  //     if (response.data.ndvi_data) {
+  //       setNdviData(response.data.ndvi_data);
+  //     } else {
+  //       alert('No NDVI data available for the selected area and date range.');
+  //     }
+  //   } catch (error) {
+  //     console.error('Error fetching NDVI data for year range:', error);
+  //     alert('There was an error fetching NDVI data. Please try again later.');
+  //   }
+  // };
 
 
   const chartData = {
@@ -427,12 +427,12 @@ function NDVIMap() {
                 >
                   Submit
                 </button>
-                <button
+                {/* <button
                   onClick={fetchNDVIForYearRange}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg"
                 >
                   Fetch NDVI for Year Range
-                </button>
+                </button> */}
                 <button
                   onClick={() => setShowDateModal(false)}
                   className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg"
