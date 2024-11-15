@@ -6,8 +6,8 @@ import { EditControl } from 'react-leaflet-draw';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import backgroundVideo from '../assets/backgroundVideo.mp4';
+import { IoMdHome } from "react-icons/io";
 import { Line } from 'react-chartjs-2';
-// import { useMap } from 'react-leaflet';
 import {
   Chart as ChartJS,
   LineElement,
@@ -29,14 +29,18 @@ function NDVIMap() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [tileUrl, setTileUrl] = useState(null);
+  const [ndviTileUrl, setNdviTileUrl] = useState(null);
+  const [eviTileUrl, setEviTileUrl] = useState(null);
+  const [ndwiTileUrl, setNdwiTileUrl] = useState(null);
+  const [mndwiTileUrl, setMndwiTileUrl] = useState(null);
   const [legend, setLegend] = useState(null);
   const [ndviValue, setNdviValue] = useState(null);
   const [popupPosition, setPopupPosition] = useState(null);
   const [selectedArea, setSelectedArea] = useState(null);
   const [showDateModal, setShowDateModal] = useState(false);
-  // const map = useMap();
+  const [selectedIndex, setSelectedIndex] = useState(null);
   const [ndviData, setNdviData] = useState({});
-
+  const [indexType, setIndexType] = useState('NDVI');
 
   const getCoordinatesFromPlace = async () => {
     try {
@@ -59,6 +63,7 @@ function NDVIMap() {
     }
   };
 
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -66,14 +71,16 @@ function NDVIMap() {
         coordinates: [coordinates.lonMin, coordinates.latMin, coordinates.lonMax, coordinates.latMax],
         start_date: startDate,
         end_date: endDate,
+        index: indexType,  // Include index type in request
       });
 
       setTileUrl(response.data.tile_url);
       setLegend(response.data.legend);
     } catch (error) {
-      console.error('Error fetching NDVI data:', error);
+      console.error('Error fetching vegetation index data:', error);
     }
   };
+
 
   const handleMapClick = async (event) => {
     const { lat, lng } = event.latlng;
@@ -112,7 +119,6 @@ function NDVIMap() {
     }
   };
 
-
   const handleDateSubmit = async () => {
     if (!startDate || !endDate) {
       alert('Please select both start and end dates.');
@@ -120,9 +126,8 @@ function NDVIMap() {
     }
     setShowDateModal(false);
 
-    const confirmView = window.confirm('Do you want to view NDVI for the selected area?');
+    const confirmView = window.confirm('Do you want to view the indices for the selected area?');
     if (confirmView) {
-
       const coordinates = selectedArea.map(([lat, lng]) => [lng, lat]);
       console.log('Sending coordinates:', coordinates);
 
@@ -131,20 +136,37 @@ function NDVIMap() {
           coordinates: coordinates,
           start_date: startDate,
           end_date: endDate,
+          index: selectedIndex,  // Pass selectedIndex here
         });
 
-        if (response.data.tile_url) {
-          setTileUrl(response.data.tile_url);
-          setLegend(response.data.legend);
+        if (response.data) {
+          // Set the tile URL based on the selected index
+          if (selectedIndex === 'NDVI') {
+            setNdviTileUrl(response.data.ndvi_tile_url || null);
+          } else if (selectedIndex === 'EVI') {
+            setEviTileUrl(response.data.evi_tile_url || null);
+          } else if (selectedIndex === 'NDWI') {
+            setNdwiTileUrl(response.data.ndwi_tile_url || null);
+          } else if (selectedIndex === 'MNDWI') {
+            setMndwiTileUrl(response.data.mndwi_tile_url || null);
+          }
+
+          // Set the legend for the selected index (specific to the selected index)
+          setLegend(response.data.legend[selectedIndex] || null);
         } else {
-          alert('No NDVI data available for the selected area and date range.');
+          alert('No data available for the selected area, date range, and index.');
         }
       } catch (error) {
-        console.error('Error fetching NDVI data for area:', error);
-        alert('There was an error fetching NDVI data. Please try again later.');
+        console.error('Error fetching data for area:', error);
+        alert('There was an error fetching data. Please try again later.');
       }
     }
   };
+
+
+
+
+
   const fetchNDVIForYearRange = async () => {
     if (!startDate || !endDate) {
       alert('Please select both start and end dates.');
@@ -187,7 +209,7 @@ function NDVIMap() {
     ],
   };
 
-  
+
   console.log('NDVI Data:', ndviData);
   console.log('Chart Data:', chartData); // Log the chart data
 
@@ -224,9 +246,17 @@ function NDVIMap() {
       </video>
 
       <div className="relative z-10 p-6 max-w-4xl mx-auto bg-s late-200/20 shadow-md rounded-lg">
+        <div className="flex items-center space-x-2 mb-4">
+          <a href="/" className="text-green-500 hover:text-green-700 flex items-center space-x-2">
+            <IoMdHome className="text-xl" />
+            <span className="text-lg">Home</span>
+          </a>
+          <span className="text-white/70">/</span>
+          <span className="text-white/70">Form</span>
+        </div>
         <form onSubmit={handleSubmit} className="space-y-4 mb-10">
           <div className="flex flex-col">
-            <label className="text-white/70 font-semibold">Place Name:</label>
+            <label className="text-white/70 font-semibold mb-2">Place Name:</label>
             <input
               type="text"
               value={place}
@@ -241,6 +271,15 @@ function NDVIMap() {
             >
               Get Coordinates
             </button>
+          </div>
+          <div className="flex flex-col">
+            <label className="text-white/70 font-semibold">Select Index:</label>
+            <select value={indexType} onChange={(e) => setIndexType(e.target.value)} className="p-2 border border-gray-300 rounded-lg">
+              <option value="NDVI">Normalized Difference Vegetation Index (NDVI)</option>
+              <option value="EVI">Enhanced Vegetation Index (EVI)</option>
+              <option value="NDWI">Normalized Difference Water Index (NDWI)</option>
+              <option value="MNDWI">Modified Normalized Difference Water Index (MNDWI)</option>
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -309,13 +348,14 @@ function NDVIMap() {
             type="submit"
             className="w-full mt-4 p-3 bg-green-600/50 text-white rounded-lg hover:bg-green-700/50 transition duration-300"
           >
-            Get NDVI Data
+            Get {selectedIndex} Data
           </button>
         </form>
 
+
         {legend && (
           <div className="mt-6 p-4 bg-gray-100 rounded-lg shadow-md">
-            <h3 className="text-xl font-semibold">NDVI Legend</h3>
+            <h3 className="text-xl font-semibold">Legend for {indexType}</h3>
             <ul className="space-y-2 mt-4">
               {Object.entries(legend).map(([color, description]) => (
                 <li key={color} className="flex items-center space-x-2">
@@ -329,11 +369,13 @@ function NDVIMap() {
             </ul>
           </div>
         )}
+
         {showDateModal && (
           <div className="fixed inset-0 bg-gray-600/50 flex justify-center items-center z-50">
             <div className="bg-white p-6 rounded-lg shadow-lg w-96 z-50">
-              <h3 className="text-xl font-semibold">Select Date Range</h3>
+              <h3 className="text-xl font-semibold">Select Date Range and Index</h3>
               <div className="space-y-4 mt-4">
+                {/* Start Date Input */}
                 <div className="flex flex-col">
                   <label className="font-semibold">Start Date:</label>
                   <input
@@ -343,6 +385,8 @@ function NDVIMap() {
                     className="p-2 border border-gray-300 rounded-lg"
                   />
                 </div>
+
+                {/* End Date Input */}
                 <div className="flex flex-col">
                   <label className="font-semibold">End Date:</label>
                   <input
@@ -352,15 +396,43 @@ function NDVIMap() {
                     className="p-2 border border-gray-300 rounded-lg"
                   />
                 </div>
+
+                {/* Index Selection */}
+                <div className="flex flex-col">
+                  <label className="font-semibold">Select Index:</label>
+                  <div className="space-y-2">
+                    {['NDVI', 'EVI', 'NDWI', 'MNDWI'].map((index) => (
+                      <div key={index} className="flex items-center">
+                        <input
+                          type="radio"
+                          id={index}
+                          name="index"
+                          value={index}
+                          checked={selectedIndex === index}
+                          onChange={(e) => setSelectedIndex(e.target.value)}
+                          className="mr-2"
+                        />
+                        <label htmlFor={index} className="text-gray-700">{index}</label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
+
+              {/* Buttons */}
               <div className="mt-4 flex justify-between">
                 <button
-                  onClick={handleDateSubmit}
+                  onClick={handleDateSubmit}  // Ensure handleDateSubmit is aware of selectedIndex
                   className="px-4 py-2 bg-green-600 text-white rounded-lg"
                 >
                   Submit
                 </button>
-                <button onClick={fetchNDVIForYearRange}>Fetch NDVI for Year Range</button>
+                <button
+                  onClick={fetchNDVIForYearRange}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg"
+                >
+                  Fetch NDVI for Year Range
+                </button>
                 <button
                   onClick={() => setShowDateModal(false)}
                   className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg"
@@ -371,7 +443,6 @@ function NDVIMap() {
             </div>
           </div>
         )}
-
         <MapContainer center={[-1.0, 37.0]} zoom={10} style={{ height: '500px', width: '100%', zIndex: 1 }} className="mt-6">
           <TileLayer
             url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
@@ -388,6 +459,10 @@ function NDVIMap() {
           </FeatureGroup>
           <ZoomToArea />
           {tileUrl && <NDVILayer />}
+          {ndviTileUrl && <TileLayer url={ndviTileUrl} />}
+          {eviTileUrl && <TileLayer url={eviTileUrl} />}
+          {ndwiTileUrl && <TileLayer url={ndwiTileUrl} />}
+          {mndwiTileUrl && <TileLayer url={mndwiTileUrl} />}
           {popupPosition && ndviValue && (
             <Popup
               position={popupPosition}
@@ -396,31 +471,33 @@ function NDVIMap() {
                 setNdviValue(null);
               }}
             >
-              NDVI value at this location: <strong>{ndviValue}</strong>
+              {selectedIndex} value at this location: <strong>{ndviValue}</strong>
             </Popup>
           )}
         </MapContainer>
+
+
         {Object.keys(ndviData).length > 0 && (
           <div style={{ width: '100%', height: '400px', backgroundColor: 'white', padding: '10px', borderRadius: '5px', boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)' }}>
-          <h2>NDVI Over Time</h2>
-          <Line data={chartData} options={{
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: {
-                  display: true,
-                  text: 'NDVI',
+            <h2>NDVI Over Time</h2>
+            <Line data={chartData} options={{
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  title: {
+                    display: true,
+                    text: 'NDVI',
+                  },
+                },
+                x: {
+                  title: {
+                    display: true,
+                    text: 'Year',
+                  },
                 },
               },
-              x: {
-                title: {
-                  display: true,
-                  text: 'Year',
-                },
-              },
-            },
-          }} />
-        </div>
+            }} />
+          </div>
         )}
       </div>
 

@@ -15,11 +15,11 @@ function Home() {
         Your browser does not support the video tag.
       </video>
       <div className="relative z-10 text-center text-white">
-        <h2 className="text-3xl font-bold text-green-600 mb-4">Welcome to the NDVI Analysis Tool</h2>
-        <p className="text-lg text-gray-200 mb-6">Analyze vegetation health and conditions using NDVI data.</p>
+        <h2 className="text-3xl font-bold text-green-600 mb-4">Welcome to the Vegetation Analysis Tool</h2>
+        <p className="text-lg text-gray-200 mb-6">Explore and analyze vegetation health and environmental conditions using various vegetation indices.</p>
         <Link to="/ndvi-map">
           <button className="bg-green-600 text-white py-2 px-6 rounded-lg hover:bg-green-700 transition duration-300">
-            Start NDVI Analysis
+          Start Vegetation Analysis
           </button>
         </Link>
       </div>
