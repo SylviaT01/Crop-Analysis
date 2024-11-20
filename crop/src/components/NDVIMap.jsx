@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import backgroundVideo from '../assets/backgroundVideo.mp4';
 import { IoMdHome } from "react-icons/io";
+import { FaRedoAlt } from 'react-icons/fa';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -34,13 +35,15 @@ function NDVIMap() {
   const [ndwiTileUrl, setNdwiTileUrl] = useState(null);
   const [mndwiTileUrl, setMndwiTileUrl] = useState(null);
   const [legend, setLegend] = useState(null);
-  const [ndviValue, setNdviValue] = useState(null);
+  // const [ndviValue, setNdviValue] = useState(null);
+  const [indexValue, setIndexValue] = useState(null);
   const [popupPosition, setPopupPosition] = useState(null);
   const [selectedArea, setSelectedArea] = useState(null);
   const [showDateModal, setShowDateModal] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(null);
   const [ndviData, setNdviData] = useState({});
   const [indexType, setIndexType] = useState('NDVI');
+  // const [map, setMap] = useState(null);
+
 
   const getCoordinatesFromPlace = async () => {
     try {
@@ -71,7 +74,7 @@ function NDVIMap() {
         coordinates: [coordinates.lonMin, coordinates.latMin, coordinates.lonMax, coordinates.latMax],
         start_date: startDate,
         end_date: endDate,
-        index: indexType,  // Include index type in request
+        index: indexType,
       });
 
       setTileUrl(response.data.tile_url);
@@ -82,24 +85,22 @@ function NDVIMap() {
   };
 
 
-  const handleMapClick = async (event) => {
-    const { lat, lng } = event.latlng;
-    try {
-      const response = await axios.post('https://backend-crop-analysis-1.onrender.com/get-ndvi-value', {
-        latitude: lat,
-        longitude: lng,
-        start_date: startDate,
-        end_date: endDate,
-      });
-      setNdviValue(response.data.ndvi_value);
-      setPopupPosition({ lat, lng });
-    } catch (error) {
-      console.error('Error fetching NDVI value:', error);
-    }
-  };
-
   const handlePolygonCreate = (e) => {
     const layer = e.layer;
+    layer.setStyle({
+      fillOpacity: 0,
+      color: '#3388ff',
+      weight: 2
+    });
+
+    layer.on('click', (event) => {
+      console.log('Polygon clicked:', event.latlng);
+      if (startDate && endDate) {
+        handleMapClick(event);
+      } else {
+        alert('Please select both start and end dates before clicking on the map.');
+      }
+    });
 
     // Check if the created layer is a polygon and handle it
     if (layer instanceof L.Polygon || layer instanceof L.Polyline) {
@@ -112,7 +113,7 @@ function NDVIMap() {
     else if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
       const latLng = layer.getLatLng();
       console.log('Selected Location Coordinates (Marker/CircleMarker):', [latLng.lat, latLng.lng]);
-      setSelectedArea([[latLng.lat, latLng.lng]]); // You can modify this based on how you want to store the data
+      setSelectedArea([[latLng.lat, latLng.lng]]);
       setShowDateModal(true);
     } else {
       console.error("Unrecognized layer type.");
@@ -120,39 +121,50 @@ function NDVIMap() {
   };
 
   const handleDateSubmit = async () => {
+    console.log("Start Date in Submit:", startDate);
+    console.log("End Date in Submit:", endDate);
     if (!startDate || !endDate) {
       alert('Please select both start and end dates.');
       return;
     }
+    console.log("Start Date:", startDate, "End Date:", endDate);
     setShowDateModal(false);
+
 
     const confirmView = window.confirm('Do you want to view the indices for the selected area?');
     if (confirmView) {
-      const coordinates = selectedArea.map(([lat, lng]) => [lng, lat]);
+      const coordinates = selectedArea.map(([lng, lat]) => [lat, lng]);
       console.log('Sending coordinates:', coordinates);
+
+      const requestData = {
+        coordinates: coordinates,
+        start_date: startDate,
+        end_date: endDate,
+        index: indexType,
+      };
+      console.log('Request Data:', requestData);
 
       try {
         const response = await axios.post('https://backend-crop-analysis-1.onrender.com/get-ndvi-for-area', {
           coordinates: coordinates,
           start_date: startDate,
           end_date: endDate,
-          index: selectedIndex,  // Pass selectedIndex here
+          index: indexType,
         });
 
+
         if (response.data) {
-          // Set the tile URL based on the selected index
-          if (selectedIndex === 'NDVI') {
+
+          if (indexType === 'NDVI') {
             setNdviTileUrl(response.data.ndvi_tile_url || null);
-          } else if (selectedIndex === 'EVI') {
+          } else if (indexType === 'EVI') {
             setEviTileUrl(response.data.evi_tile_url || null);
-          } else if (selectedIndex === 'NDWI') {
+          } else if (indexType === 'NDWI') {
             setNdwiTileUrl(response.data.ndwi_tile_url || null);
-          } else if (selectedIndex === 'MNDWI') {
+          } else if (indexType === 'MNDWI') {
             setMndwiTileUrl(response.data.mndwi_tile_url || null);
           }
-
-          // Set the legend for the selected index (specific to the selected index)
-          setLegend(response.data.legend[selectedIndex] || null);
+          setLegend(response.data.legend[indexType] || null);
         } else {
           alert('No data available for the selected area, date range, and index.');
         }
@@ -162,10 +174,40 @@ function NDVIMap() {
       }
     }
   };
+  const handleMapClick = async (event) => {
+    const { lat, lng } = event.latlng;
+
+    console.log("start_date:", startDate, "end_date:", endDate);
+
+    if (!startDate || !endDate) {
+      console.error("Missing start_date or end_date");
+      return;
+    }
+
+    try {
+      const response = await axios.post('https://backend-crop-analysis-1.onrender.com/get-index-values', {
+        latitude: lat,
+        longitude: lng,
+        start_date: startDate,
+        end_date: endDate,
+      });
+
+      const data = response.data;
+      const indexKey = indexType.toLowerCase() + '_value';
+      console.log('Response data:', response.data);
+      setIndexValue(data[indexKey]);
+      setPopupPosition({ lat, lng });
+      console.log(`${indexType} Value at ${lat}, ${lng}:`, data[indexKey]);
+      console.log('Index Value:', data[indexKey]);
+      console.log('Popup Position:', { lat, lng });
+      console.log('Map clicked at:', { lat, lng });
 
 
 
-
+    } catch (error) {
+      console.error('Error fetching index value:', error);
+    }
+  };
 
   // const fetchNDVIForYearRange = async () => {
   //   if (!startDate || !endDate) {
@@ -197,34 +239,45 @@ function NDVIMap() {
 
 
   const chartData = {
-    labels: Object.keys(ndviData), // Years
+    labels: Object.keys(ndviData),
     datasets: [
       {
         label: 'Mean NDVI',
-        data: Object.values(ndviData), // NDVI values
-        borderColor: 'rgba(75, 192, 192, 1)', // Solid color for the line
-        backgroundColor: 'rgba(75, 192, 192, 0.5)', // Adjust opacity here (0.5 is semi-transparent)
+        data: Object.values(ndviData),
+        borderColor: 'rgba(75, 192, 192, 1)',
+        backgroundColor: 'rgba(75, 192, 192, 0.5)',
         borderWidth: 1,
       },
     ],
   };
 
 
-  console.log('NDVI Data:', ndviData);
-  console.log('Chart Data:', chartData); // Log the chart data
 
   function NDVILayer() {
     const map = useMap();
-    if (tileUrl) {
-      const ndviLayer = L.tileLayer(tileUrl, {
-        attribution: 'Google Earth Engine',
-      });
-      ndviLayer.addTo(map);
-      map.on('click', handleMapClick);
-      return () => map.removeLayer(ndviLayer);
-    }
+
+    React.useEffect(() => {
+      if (tileUrl) {
+        const ndviLayer = L.tileLayer(tileUrl, {
+          attribution: 'Google Earth Engine',
+          interactive: true,
+        });
+        ndviLayer.addTo(map);
+
+        const handleClick = (event) => {
+          handleMapClick(event);
+        };
+        map.on('click', handleClick);
+        return () => {
+          map.off('click', handleClick);
+          map.removeLayer(ndviLayer);
+        };
+      }
+    }, [tileUrl, map]);
+
     return null;
   }
+
 
   function ZoomToArea() {
     const map = useMap();
@@ -237,6 +290,28 @@ function NDVIMap() {
     }
     return null;
   }
+  const handleClearMap = () => {
+    setTileUrl(null);
+    setNdviTileUrl(null);
+    setEviTileUrl(null);
+    setNdwiTileUrl(null);
+    setMndwiTileUrl(null);
+    setLegend(null);
+    setIndexValue(null);
+    setPopupPosition(null);
+    setSelectedArea(null);
+
+    // Remove drawn layers (if any)
+    const map = document.querySelector('.leaflet-container')?.leafletElement;
+    if (map) {
+      map.eachLayer((layer) => {
+        if (layer instanceof L.TileLayer && !layer.options.attribution.includes('Google Maps')) {
+          map.removeLayer(layer);
+        }
+      });
+    }
+  };
+
 
   return (
     <div className="relative">
@@ -348,7 +423,7 @@ function NDVIMap() {
             type="submit"
             className="w-full mt-4 p-3 bg-green-600/50 text-white rounded-lg hover:bg-green-700/50 transition duration-300"
           >
-            Get {selectedIndex} Data
+            Get {indexType} Data
           </button>
         </form>
 
@@ -375,29 +450,26 @@ function NDVIMap() {
             <div className="bg-white p-6 rounded-lg shadow-lg w-96 z-50">
               <h3 className="text-xl font-semibold">Select Date Range and Index</h3>
               <div className="space-y-4 mt-4">
-                {/* Start Date Input */}
                 <div className="flex flex-col">
                   <label className="font-semibold">Start Date:</label>
                   <input
                     type="date"
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(e) => { setStartDate(e.target.value); console.log("Start Date Changed:", e.target.value); }}
+                    required
                     className="p-2 border border-gray-300 rounded-lg"
                   />
                 </div>
-
-                {/* End Date Input */}
                 <div className="flex flex-col">
                   <label className="font-semibold">End Date:</label>
                   <input
                     type="date"
                     value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
+                    onChange={(e) => { setEndDate(e.target.value); console.log("End Date Changed:", e.target.value); }}
+                    required
                     className="p-2 border border-gray-300 rounded-lg"
                   />
                 </div>
-
-                {/* Index Selection */}
                 <div className="flex flex-col">
                   <label className="font-semibold">Select Index:</label>
                   <div className="space-y-2">
@@ -408,8 +480,8 @@ function NDVIMap() {
                           id={index}
                           name="index"
                           value={index}
-                          checked={selectedIndex === index}
-                          onChange={(e) => setSelectedIndex(e.target.value)}
+                          checked={indexType === index}
+                          onChange={(e) => setIndexType(e.target.value)}
                           className="mr-2"
                         />
                         <label htmlFor={index} className="text-gray-700">{index}</label>
@@ -418,11 +490,9 @@ function NDVIMap() {
                   </div>
                 </div>
               </div>
-
-              {/* Buttons */}
               <div className="mt-4 flex justify-between">
                 <button
-                  onClick={handleDateSubmit}  // Ensure handleDateSubmit is aware of selectedIndex
+                  onClick={handleDateSubmit}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg"
                 >
                   Submit
@@ -443,7 +513,8 @@ function NDVIMap() {
             </div>
           </div>
         )}
-        <MapContainer center={[-1.0, 37.0]} zoom={10} style={{ height: '500px', width: '100%', zIndex: 1 }} className="mt-6">
+        <div className="map-container relative">
+        <MapContainer center={[-1.0, 37.0]} zoom={10} style={{ height: '500px', width: '100%', zIndex: 1 }} className="mt-6"  >
           <TileLayer
             url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
             attribution="&copy; Google Maps"
@@ -463,18 +534,26 @@ function NDVIMap() {
           {eviTileUrl && <TileLayer url={eviTileUrl} />}
           {ndwiTileUrl && <TileLayer url={ndwiTileUrl} />}
           {mndwiTileUrl && <TileLayer url={mndwiTileUrl} />}
-          {popupPosition && ndviValue && (
+          {popupPosition && indexValue && (
             <Popup
               position={popupPosition}
               onClose={() => {
                 setPopupPosition(null);
-                setNdviValue(null);
+                setIndexValue(null);
               }}
             >
-              {selectedIndex} value at this location: <strong>{ndviValue}</strong>
+              {indexType} value at this location: <strong>{indexValue.toFixed(2)}</strong>
             </Popup>
           )}
         </MapContainer>
+        <button
+        onClick={handleClearMap}
+        className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white text-gray-600 hover:bg-gray-100 shadow-md rounded-full p-2 z-[1000]"
+        title="Clear Map"
+      >
+        <FaRedoAlt size={14} />
+      </button>
+        </div>
 
 
         {Object.keys(ndviData).length > 0 && (

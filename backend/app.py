@@ -20,9 +20,12 @@ def calculate_ndvi(image):
 
 
 def calculate_evi(image):
-    nir_band = image.select('B8')  # NIR band
-    red_band = image.select('B4')  # Red band
-    blue_band = image.select('B2')  # Blue band
+    # NIR band
+    nir_band = image.select('B8') 
+    # Red band
+    red_band = image.select('B4') 
+    # Blue band 
+    blue_band = image.select('B2')  
     
     # Normalize by dividing by 10000 (if Sentinel-2 data)
     nir_band = nir_band.divide(10000)
@@ -30,10 +33,14 @@ def calculate_evi(image):
     blue_band = blue_band.divide(10000)
     
     # Constants for EVI
-    G = 2.5  # Gain factor
-    C1 = 6  # Red band coefficient
-    C2 = 7.5  # Blue band coefficient
-    L = 10000  # Canopy background adjustment value
+    # Gain factor
+    G = 2.5  
+    # Red band coefficient
+    C1 = 6  
+    # Blue band coefficient
+    C2 = 7.5 
+    # Canopy background adjustment value 
+    L = 10000  
 
     # EVI formula
     evi = nir_band.subtract(red_band).multiply(G).divide(
@@ -65,7 +72,7 @@ def get_vegetation_index():
     coordinates = data.get('coordinates') 
     start_date = data.get('start_date')
     end_date = data.get('end_date')
-    index_type = data.get('index', 'NDVI')  # Default to NDVI if not specified
+    index_type = data.get('index', 'NDVI')  
 
     aoi = ee.Geometry.Rectangle(coordinates)
     image_collection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') \
@@ -151,16 +158,20 @@ def get_vegetation_index():
     })
 
 
-
-
-@app.route('/get-ndvi-value', methods=['POST'])
-def get_ndvi_value():
+@app.route('/get-index-values', methods=['POST'])
+def get_index_values():
     # Extract the user input from the request
     data = request.json
+    print(f"Received data: {data}")
     latitude = data.get('latitude')
     longitude = data.get('longitude')
     start_date = data.get('start_date')
     end_date = data.get('end_date')
+
+    if not start_date or not end_date:
+        return jsonify({"error": "Invalid date range"}), 400
+    print(f"Start date: {start_date}, End date: {end_date}")
+
 
     # Define the point of interest (user-provided latitude and longitude)
     point = ee.Geometry.Point([longitude, latitude])
@@ -170,9 +181,9 @@ def get_ndvi_value():
         .filterBounds(point) \
         .filterDate(start_date, end_date) \
         .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) 
-
+    print(image_collection.size().getInfo())
     # Get the first image in the filtered collection
-    image = image_collection.sort('system:time_start').first()  
+    image = image_collection.sort('system:time_start').first()
 
     # Check if the image exists
     image_exists = image.getInfo() is not None
@@ -182,21 +193,45 @@ def get_ndvi_value():
             'error': 'No images available for the given date range and location with acceptable cloud cover.'
         }), 404
 
-    # Select Red and NIR bands for NDVI calculation
-    nir_band = image.select('B8')
-    red_band = image.select('B4')
-    ndvi = nir_band.subtract(red_band).divide(nir_band.add(red_band)).rename('NDVI')
+    # Calculate all indices
+    ndvi = calculate_ndvi(image)
+    evi = calculate_evi(image)
+    ndwi = calculate_ndwi(image)
+    mndwi = calculate_mndwi(image)
 
-    # Sample the NDVI value at the clicked point
-    ndvi_value = ndvi.sample(point).first().get('NDVI').getInfo()
+    # Combine all indices into a single image
+    combined_image = ndvi.addBands([evi, ndwi, mndwi])
 
-    return jsonify({'ndvi_value': ndvi_value})
+    # Sample the values of all indices at the point
+    sampled_values = combined_image.sample(point, 10).first().getInfo()
+
+    # Extract values from the sampled feature
+    if sampled_values:
+        properties = sampled_values['properties']
+        ndvi_value = properties.get('NDVI')
+        evi_value = properties.get('EVI')
+        ndwi_value = properties.get('NDWI')
+        mndwi_value = properties.get('MNDWI')
+    else:
+        return jsonify({
+            'error': 'Failed to retrieve values at the given location.'
+        }), 500
+
+    # Return all index values
+    return jsonify({
+        'ndvi_value': ndvi_value,
+        'evi_value': evi_value,
+        'ndwi_value': ndwi_value,
+        'mndwi_value': mndwi_value
+    })
+
 
 
 @app.route('/get-ndvi-for-area', methods=['POST'])
 def get_ndvi_for_area():
     # Extract the user input from the request
     data = request.json
+    print("Received data:", data) 
     coordinates = data.get('coordinates') 
     start_date = data.get('start_date')
     end_date = data.get('end_date')
@@ -208,7 +243,7 @@ def get_ndvi_for_area():
     image_collection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') \
         .filterBounds(aoi) \
         .filterDate(start_date, end_date) \
-        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 5))  
+        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))  
     
     # Calculate indices for the image collection
     ndvi_collection = image_collection.map(calculate_ndvi)
@@ -281,6 +316,7 @@ def get_ndvi_for_area():
         'mndwi_tile_url': mndwi_params['tile_fetcher'].url_format,
         'legend': legend
     })
+    
 
 
 @app.route('/get-ndvi-for-year-range', methods=['POST'])
@@ -330,5 +366,5 @@ def get_ndvi_for_year_range():
     return jsonify({'ndvi_data': ndvi_data})
 
 if __name__ == '__main__':
-    # app.run(debug=True)
-    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    app.run(debug=True)
+    # app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
