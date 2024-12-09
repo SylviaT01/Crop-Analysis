@@ -47,6 +47,8 @@ function NDVIMap() {
   const endDateRef = useRef(endDate);
   const [loading, setLoading] = useState(true);
   const [tilesLoaded, setTilesLoaded] = useState(false);
+  const [indexRange, setIndexRange] = useState(null);
+  const [palette, setPalette] = useState([]);
 
   React.useEffect(() => {
     startDateRef.current = startDate;
@@ -99,7 +101,7 @@ function NDVIMap() {
       pauseOnHover: true,
     });
     try {
-      const response = await axios.post('https://backend-crop-analysis-1.onrender.com/get-ndvi', {
+      const response = await axios.post('http://127.0.0.1:5000/get-ndvi', {
         coordinates: [coordinates.lonMin, coordinates.latMin, coordinates.lonMax, coordinates.latMax],
         start_date: startDateRef.current,
         end_date: endDateRef.current,
@@ -116,6 +118,8 @@ function NDVIMap() {
         });
         setTileUrl(response.data.tile_url);
         setLegend(response.data.legend);
+        setIndexRange(response.data.index_range);
+        setPalette(response.data.palette);
         setTimeout(() => setLoading(false), 3000);
       }
     } catch (error) {
@@ -190,7 +194,7 @@ function NDVIMap() {
       console.log('Sending coordinates:', coordinates);
 
       try {
-        const response = await axios.post('https://backend-crop-analysis-1.onrender.com/get-ndvi-for-area', {
+        const response = await axios.post('http://127.0.0.1:5000/get-ndvi-for-area', {
           coordinates: coordinates,
           start_date: startDateRef.current,
           end_date: endDateRef.current,
@@ -218,6 +222,7 @@ function NDVIMap() {
             setMndwiTileUrl(response.data.mndwi_tile_url || null);
           }
           setLegend(response.data.legend[indexType] || null);
+          setIndexRange(response.data.index_range[indexType] || null);
           setTimeout(() => setLoading(false), 3000);
         }
       } catch (error) {
@@ -247,7 +252,7 @@ function NDVIMap() {
     setIndexValue(null);
 
     try {
-      const response = await axios.post('https://backend-crop-analysis-1.onrender.com/get-index-values', {
+      const response = await axios.post('http://127.0.0.1:5000/get-index-values', {
         latitude: lat,
         longitude: lng,
         start_date: startDateRef.current,
@@ -359,6 +364,7 @@ function NDVIMap() {
     setNdwiTileUrl(null);
     setMndwiTileUrl(null);
     setLegend(null);
+    setIndexRange(null);
     setIndexValue(null);
     setPopupPosition(null);
     setSelectedArea(null);
@@ -372,6 +378,7 @@ function NDVIMap() {
       });
     }
   };
+
 
 
   return (
@@ -522,10 +529,19 @@ function NDVIMap() {
             />
           </div>
         )}
+        {indexRange && indexRange[indexType + '_min'] !== undefined && indexRange[indexType + '_max'] !== undefined && (
+          <div className="mt-6 p-4 bg-gray-100 rounded-lg shadow-md">
+            <h3 className="text-xl font-semibold">Index Range for {indexType}</h3>
+            <p className="text-gray-700">Min: {(indexRange[indexType + '_min']).toFixed(4)}</p>
+            <p className="text-gray-700">Max: {(indexRange[indexType + '_max']).toFixed(4)}</p>
+          </div>
+        )}
+
         {legend && (
           <div className="mt-6 p-4 bg-gray-100 rounded-lg shadow-md">
             <h3 className="text-xl font-semibold">Legend for {indexType}</h3>
-            <ul className="space-y-2 mt-4">
+            <div style={{ width: '100%', height: '20px', background: `linear-gradient(to right, ${palette.join(', ')})` }}></div>
+            <ul className="space-y-2 mt-4 flex flex-row justify-around">
               {Object.entries(legend).map(([color, description]) => (
                 <li key={color} className="flex items-center space-x-2">
                   <span
@@ -538,6 +554,7 @@ function NDVIMap() {
             </ul>
           </div>
         )}
+
 
         {showDateModal && (
           <div className="fixed inset-0 bg-gray-600/50 flex justify-center items-center z-50">

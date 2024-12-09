@@ -91,34 +91,34 @@ def get_vegetation_index():
     if index_type == 'NDVI':
         vegetation_index = calculate_ndvi(image)
         legend = {
-            'Green': 'High vegetation (healthy plant growth) - Index: 0.3 to 1.0',
-            'Yellow': 'Moderate vegetation (sparse or stressed plants) - Index: 0.1 to 0.3',
-            'Cyan': 'Low vegetation or bare soil - Index: -0.1 to 0.1',
-            'Blue': 'Water bodies - Index: -1.0 to -0.1'
+            'Green': 'High vegetation (healthy plant growth) (High values)',
+            'Yellow': 'Moderate vegetation (sparse or stressed plants)',
+            'Cyan': 'Low vegetation or bare soil',
+            'Blue': 'Water bodies (Low values)'
         }
     elif index_type == 'EVI':
         vegetation_index = calculate_evi(image)
         legend = {
-            '#006400': 'High vegetation - Index: > 0.4',
-            '#ADFF2F': 'Moderate vegetation - Index: 0.2 to 0.4',
-            '#D2B48C': 'Bare soil - Index: 0 to 0.2',
-            '#0000FF': 'Non-vegetated/Water bodies - Index: < 0'
+            '#006400': 'High vegetation (High values)',
+            '#ADFF2F': 'Moderate vegetation',
+            '#D2B48C': 'Bare soil',
+            '#0000FF': 'Non-vegetated/Water bodies (Low values)'
         }
     elif index_type == 'NDWI':
         vegetation_index = calculate_ndwi(image)
         legend = {
-            '#0000FF': 'Water - High water content - Index: > 0.3',
-            '#87CEEB': 'Moderate water content - Index: 0.1 to 0.3',
-            '#D3D3D3': 'Low water content or bare soil - Index: -0.1 to 0.1',
-            '#8B4513': 'Dry/bare soil - Index: < -0.1'
+            '#0000FF': 'Water - High water content (High values)',
+            '#87CEEB': 'Moderate water content',
+            '#D3D3D3': 'Low water content or bare soil',
+            '#8B4513': 'Dry/bare soil (Low values)'
         }
     elif index_type == 'MNDWI':  # New option for Modified NDWI
         vegetation_index = calculate_mndwi(image)
         legend = {
-            '#0000FF': 'Water - High water content - Index: > 0.3',
-            '#87CEEB': 'Moderate water content - Index: 0.1 to 0.3',
-            '#D3D3D3': 'Low water content or bare soil - Index: -0.1 to 0.1',
-            '#8B4513': 'Dry/bare soil - Index: < -0.1'
+            '#0000FF': 'Water - High water content (High Values)',
+            '#87CEEB': 'Moderate water content',
+            '#D3D3D3': 'Low water content or bare soil',
+            '#8B4513': 'Dry/bare soil (Low values)'
         }
     else:
         return jsonify({
@@ -137,25 +137,57 @@ def get_vegetation_index():
     print(f"Vegetation Index Range for ROI: {stats}")
 
     # Generate map URL with correct color palette and value range
+    # ndvi_params = vegetation_index.getMapId({
+    #     'min': stats['NDWI_min'] if index_type == 'NDWI' else 
+    #            stats['NDVI_min'] if index_type == 'NDVI' else 
+    #            stats['EVI_min'] if index_type == 'EVI' else
+    #            stats['MNDWI_min'],
+    #     'max': stats['NDWI_max'] if index_type == 'NDWI' else 
+    #            stats['NDVI_max'] if index_type == 'NDVI' else 
+    #            stats['EVI_max'] if index_type == 'EVI' else
+    #            stats['MNDWI_max'],
+    #     'palette': ['blue', 'cyan', 'yellow', 'green'] if index_type == 'NDVI' else 
+    #                ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF'] if index_type == 'NDWI' else
+    #                ['#0000FF', '#D2B48C', '#ADFF2F', '#006400'] if index_type == 'EVI' else 
+    #                ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF'] 
+    # })
+
+    # return jsonify({
+    #     'tile_url': ndvi_params['tile_fetcher'].url_format,
+    #     'attribution': 'Google Earth Engine',
+    #     'legend': legend,
+    #     'index_range': stats
+    # })
+
+    # Define the color palette based on the index type
+    if index_type == 'NDVI':
+        palette = ['blue', 'cyan', 'yellow', 'green']
+    elif index_type == 'NDWI':
+        palette = ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']
+    elif index_type == 'EVI':
+        palette = ['#0000FF', '#D2B48C', '#ADFF2F', '#006400']
+    else:  
+        palette = ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']
+
+    # Generate map URL with correct color palette and value range
     ndvi_params = vegetation_index.getMapId({
         'min': stats['NDWI_min'] if index_type == 'NDWI' else 
-               stats['NDVI_min'] if index_type == 'NDVI' else 
-               stats['EVI_min'] if index_type == 'EVI' else
-               stats['MNDWI_min'],
+            stats['NDVI_min'] if index_type == 'NDVI' else 
+            stats['EVI_min'] if index_type == 'EVI' else
+            stats['MNDWI_min'],
         'max': stats['NDWI_max'] if index_type == 'NDWI' else 
-               stats['NDVI_max'] if index_type == 'NDVI' else 
-               stats['EVI_max'] if index_type == 'EVI' else
-               stats['MNDWI_max'],
-        'palette': ['blue', 'cyan', 'yellow', 'green'] if index_type == 'NDVI' else 
-                   ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF'] if index_type == 'NDWI' else
-                   ['#0000FF', '#D2B48C', '#ADFF2F', '#006400'] if index_type == 'EVI' else 
-                   ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']  # Palette for MNDWI
+            stats['NDVI_max'] if index_type == 'NDVI' else 
+            stats['EVI_max'] if index_type == 'EVI' else
+            stats['MNDWI_max'],
+        'palette': palette  
     })
 
     return jsonify({
         'tile_url': ndvi_params['tile_fetcher'].url_format,
         'attribution': 'Google Earth Engine',
-        'legend': legend
+        'legend': legend,
+        'index_range': stats,
+        'palette': palette,  # Return the palette
     })
 
 
@@ -291,29 +323,29 @@ def get_ndvi_for_area():
     # Define legends for the indices
     legend = {
         'NDVI': {
-            'Green': 'High vegetation (healthy plant growth) - NDVI: 0.3 to 1.0',
-            'Yellow': 'Moderate vegetation (sparse or stressed plants) - NDVI: 0.1 to 0.3',
-            'Cyan': 'Low vegetation or bare soil - NDVI: -0.1 to 0.1',
-            'Blue': 'Water bodies - NDVI: -1.0 to -0.1'
+            'Green': 'High vegetation (healthy plant growth)',
+            'Yellow': 'Moderate vegetation (sparse or stressed plants)',
+            'Cyan': 'Low vegetation or bare soil',
+            'Blue': 'Water bodies'
         },
         'EVI': {
-            '#228B22': 'High vegetation - Index: > 0.4',
-            '#ADFF2F': 'Moderate vegetation - Index: 0.2 to 0.4',
-            '#FFFF00': 'Sparse vegetation - Index: 0 to 0.2',
-            '#8B4513': 'Bare soil - Index: -0.2 to 0',
-            '#0000FF': 'Water bodies - Index: < -0.2'
+            '#228B22': 'High vegetation',
+            '#ADFF2F': 'Moderate vegetation',
+            '#FFFF00': 'Sparse vegetation',
+            '#8B4513': 'Bare soil',
+            '#0000FF': 'Water bodies'
         },
         'NDWI': {
-            '#0000FF': 'Water - High water content - Index: > 0.3',
-            '#87CEEB': 'Moderate water content - Index: 0.1 to 0.3',
-            '#D3D3D3': 'Low water content or bare soil - Index: -0.1 to 0.1',
-            '#8B4513': 'Dry/bare soil - Index: < -0.1'
+            '#0000FF': 'Water - High water content',
+            '#87CEEB': 'Moderate water content',
+            '#D3D3D3': 'Low water content or bare soil',
+            '#8B4513': 'Dry/bare soil'
         },
         'MNDWI': {
-            '#0000FF': 'Water - High water content - Index: > 0.3',
-            '#87CEEB': 'Moderate water content - Index: 0.1 to 0.3',
-            '#D3D3D3': 'Low water content or bare soil - Index: -0.1 to 0.1',
-            '#8B4513': 'Dry/bare soil - Index: < -0.1'
+            '#0000FF': 'Water - High water content',
+            '#87CEEB': 'Moderate water content',
+            '#D3D3D3': 'Low water content or bare soil',
+            '#8B4513': 'Dry/bare soil'
         }
     }
 
