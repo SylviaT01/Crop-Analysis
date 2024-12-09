@@ -20,12 +20,9 @@ def calculate_ndvi(image):
 
 
 def calculate_evi(image):
-    # NIR band
-    nir_band = image.select('B8') 
-    # Red band
-    red_band = image.select('B4') 
-    # Blue band 
-    blue_band = image.select('B2')  
+    nir_band = image.select('B8')  # NIR band
+    red_band = image.select('B4')  # Red band
+    blue_band = image.select('B2')  # Blue band
     
     # Normalize by dividing by 10000 (if Sentinel-2 data)
     nir_band = nir_band.divide(10000)
@@ -33,14 +30,10 @@ def calculate_evi(image):
     blue_band = blue_band.divide(10000)
     
     # Constants for EVI
-    # Gain factor
-    G = 2.5  
-    # Red band coefficient
-    C1 = 6  
-    # Blue band coefficient
-    C2 = 7.5 
-    # Canopy background adjustment value 
-    L = 10000  
+    G = 2.5  # Gain factor
+    C1 = 6  # Red band coefficient
+    C2 = 7.5  # Blue band coefficient
+    L = 10000  # Canopy background adjustment value
 
     # EVI formula
     evi = nir_band.subtract(red_band).multiply(G).divide(
@@ -60,11 +53,10 @@ def calculate_ndwi(image):
 
 # Function to calculate MNDWI (Modified NDWI using SWIR)
 def calculate_mndwi(image):
-    green_band = image.select('B3')  # Green Band (Band 3)
-    swir_band = image.select('B11')  # SWIR Band (Band 11)
+    green_band = image.select('B3') 
+    swir_band = image.select('B11')  
     mndwi = green_band.subtract(swir_band).divide(green_band.add(swir_band)).rename('MNDWI')
     return mndwi
-
 
 @app.route('/get-ndvi', methods=['POST'])
 def get_vegetation_index():
@@ -75,15 +67,24 @@ def get_vegetation_index():
     index_type = data.get('index', 'NDVI')  
 
     aoi = ee.Geometry.Rectangle(coordinates)
+
     image_collection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') \
         .filterBounds(aoi) \
         .filterDate(start_date, end_date) \
-        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 10))
+        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+    
+    image_count = image_collection.size().getInfo()
+    print(f"Number of images found: {image_count}") 
+    if image_collection.size().getInfo() == 0:
+        return jsonify({
+            'error': f'No Sentinel-2 imagery available for the requested date range ({start_date} to {end_date}) and area of interest.'
+        }), 404
 
     image = image_collection.sort('system:time_start').first()  
     if image.getInfo() is None:
         return jsonify({
             'error': 'No images available for the given date range and area with acceptable cloud cover.'
+
         }), 404
 
     # Calculate the requested vegetation index
@@ -244,7 +245,15 @@ def get_ndvi_for_area():
         .filterBounds(aoi) \
         .filterDate(start_date, end_date) \
         .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))  
+
+    # Check if the image collection has any images after filtering
+    image_count = image_collection.size().getInfo()
     
+    if image_count == 0:
+        return jsonify({
+            'error': 'No images available for the given date range and area with acceptable cloud cover.'
+        }), 404
+
     # Calculate indices for the image collection
     ndvi_collection = image_collection.map(calculate_ndvi)
     evi_collection = image_collection.map(calculate_evi)
@@ -316,6 +325,10 @@ def get_ndvi_for_area():
         'mndwi_tile_url': mndwi_params['tile_fetcher'].url_format,
         'legend': legend
     })
+    
+
+
+
     
 
 

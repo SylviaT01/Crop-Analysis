@@ -4,11 +4,14 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import Home from './components/Home';
 import NDVIMap from './components/NDVIMap';
 import './App.css';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function App() {
   return (
     <Router>
       <div className="App">
+      <ToastContainer />
         {/* <header>
           <h1>NDVI Analysis Tool</h1>
         </header> */}
