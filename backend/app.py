@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS 
 import ee
 import os
@@ -58,12 +58,6 @@ def calculate_mndwi(image):
     mndwi = green_band.subtract(swir_band).divide(green_band.add(swir_band)).rename('MNDWI')
     return mndwi
 
-# Function to calculate Vegetation Condition Index (VCI)
-def calculate_vci(image, min_ndvi, max_ndvi):
-    ndvi = calculate_ndvi(image)
-    vci = ndvi.subtract(min_ndvi).divide(max_ndvi.subtract(min_ndvi)).rename('VCI')
-    return vci
-
 # Function to calculate Soil-Adjusted Vegetation Index (SAVI)
 def calculate_savi(image, L=0.5):
     nir_band = image.select('B8')
@@ -99,7 +93,8 @@ def get_vegetation_index():
         return jsonify({
             'error': f'No Sentinel-2 imagery available for the requested date range ({start_date} to {end_date}) and area of interest.'
         }), 404
-
+   
+    
     image = image_collection.sort('system:time_start').first()  
     if image.getInfo() is None:
         return jsonify({
@@ -132,7 +127,7 @@ def get_vegetation_index():
             '#D3D3D3': 'Low water content (e.g., dry land, bare soil)',
             '#8B4513': 'Bare soil or dry land (Low water content)'
         }
-    elif index_type == 'MNDWI':  # New option for Modified NDWI
+    elif index_type == 'MNDWI':  
         vegetation_index = calculate_mndwi(image)
         legend = {
             '#0000FF': 'Water bodies - High water content (High values)',
@@ -140,6 +135,7 @@ def get_vegetation_index():
             '#D3D3D3': 'Low water content or exposed land',
             '#8B4513': 'Dry land or bare soil (Very low values)'
         }
+    
     else:
         return jsonify({
             'error': 'Invalid vegetation index type. Choose from NDVI, EVI, NDWI, or MNDWI.'
@@ -152,6 +148,7 @@ def get_vegetation_index():
         scale=30,
         maxPixels=1e8
     ).getInfo()
+    print(f"Stats for {index_type}: {stats}")
 
     # Print the range for the vegetation index
     print(f"Vegetation Index Range for ROI: {stats}")
@@ -167,24 +164,43 @@ def get_vegetation_index():
         palette = ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']
 
     # Generate map URL with correct color palette and value range
+    # ndvi_params = vegetation_index.getMapId({
+    #     'min': stats['NDWI_min'] if index_type == 'NDWI' else 
+    #         stats['NDVI_min'] if index_type == 'NDVI' else 
+    #         stats['EVI_min'] if index_type == 'EVI' else
+    #         stats['VCI_min'] if index_type == 'VCI' else
+    #         stats['MNDWI_min'],
+    #     'max': stats['NDWI_max'] if index_type == 'NDWI' else 
+    #         stats['NDVI_max'] if index_type == 'NDVI' else 
+    #         stats['EVI_max'] if index_type == 'EVI' else
+    #         stats['VCI_max'] if index_type == 'VCI' else
+    #         stats['MNDWI_max'],
+    #     'palette': palette  
+    # })
+
+    # Generate map URL with correct color palette and value range
+    min_value = stats.get(f'{index_type}_min', None)
+    max_value = stats.get(f'{index_type}_max', None)
+
+    if min_value is None or max_value is None:
+        return jsonify({
+            'error': f'Missing min/max values for {index_type}.'
+        }), 500
+
     ndvi_params = vegetation_index.getMapId({
-        'min': stats['NDWI_min'] if index_type == 'NDWI' else 
-            stats['NDVI_min'] if index_type == 'NDVI' else 
-            stats['EVI_min'] if index_type == 'EVI' else
-            stats['MNDWI_min'],
-        'max': stats['NDWI_max'] if index_type == 'NDWI' else 
-            stats['NDVI_max'] if index_type == 'NDVI' else 
-            stats['EVI_max'] if index_type == 'EVI' else
-            stats['MNDWI_max'],
+        'min': min_value,
+        'max': max_value,
         'palette': palette  
     })
+    print(f"Stats for {index_type}: {stats}")
+
 
     return jsonify({
         'tile_url': ndvi_params['tile_fetcher'].url_format,
         'attribution': 'Google Earth Engine',
         'legend': legend,
         'index_range': stats,
-        'palette': palette,  # Return the palette
+        'palette': palette, 
     })
 
 
@@ -255,285 +271,6 @@ def get_index_values():
         'mndwi_value': mndwi_value
     })
 
-# @app.route('/get-ndvi-for-area', methods=['POST'])
-# def get_ndvi_for_area():
-#     # Extract the user input from the request
-#     data = request.json
-#     print("Received data:", data) 
-#     coordinates = data.get('coordinates') 
-#     start_date = data.get('start_date')
-#     end_date = data.get('end_date')
-
-#     # Define area of interest (from user-provided polygon coordinates)
-#     aoi = ee.Geometry.Polygon(coordinates)
-
-#     # Load and filter Sentinel-2 image collection
-#     image_collection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') \
-#         .filterBounds(aoi) \
-#         .filterDate(start_date, end_date) \
-#         .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))  
-
-#     # Check if the image collection has any images after filtering
-#     image_count = image_collection.size().getInfo()
-#     print(f"Number of images found: {image_count}") 
-#     if image_count == 0:
-#         return jsonify({
-#             'error': 'No images available for the given date range and area with acceptable cloud cover.'
-#         }), 404
-
-#     # Calculate indices for the image collection
-#     ndvi_collection = image_collection.map(calculate_ndvi)
-#     evi_collection = image_collection.map(calculate_evi)
-#     ndwi_collection = image_collection.map(calculate_ndwi)
-#     mndwi_collection = image_collection.map(calculate_mndwi)
-
-#     # Create a mosaic from the collections
-#     ndvi_mosaic = ndvi_collection.mean().clip(aoi)
-#     evi_mosaic = evi_collection.mean().clip(aoi)
-#     ndwi_mosaic = ndwi_collection.mean().clip(aoi)
-#     mndwi_mosaic = mndwi_collection.mean().clip(aoi)
-
-#     # Compute statistics for each index
-#     ndvi_stats = ndvi_mosaic.reduceRegion(
-#         reducer=ee.Reducer.minMax(),
-#         geometry=aoi,
-#         scale=30,
-#         maxPixels=1e8
-#     ).getInfo()
-
-#     evi_stats = evi_mosaic.reduceRegion(
-#         reducer=ee.Reducer.minMax(),
-#         geometry=aoi,
-#         scale=30,
-#         maxPixels=1e8
-#     ).getInfo()
-
-#     ndwi_stats = ndwi_mosaic.reduceRegion(
-#         reducer=ee.Reducer.minMax(),
-#         geometry=aoi,
-#         scale=30,
-#         maxPixels=1e8
-#     ).getInfo()
-
-#     mndwi_stats = mndwi_mosaic.reduceRegion(
-#         reducer=ee.Reducer.minMax(),
-#         geometry=aoi,
-#         scale=30,
-#         maxPixels=1e8
-#     ).getInfo()
-
-#     # Define visualization parameters for each index
-#     ndvi_params = ndvi_mosaic.getMapId({
-#         'min': ndvi_stats['NDVI_min'], 
-#         'max': ndvi_stats['NDVI_max'], 
-#         'palette': ['blue', 'cyan', 'yellow', 'green']
-#     })
-#     evi_params = evi_mosaic.getMapId({
-#         'min': evi_stats['EVI_min'], 
-#         'max': evi_stats['EVI_max'], 
-#         'palette': ['#228B22', '#ADFF2F', '#FFFF00', '#8B4513']
-#     })
-#     ndwi_params = ndwi_mosaic.getMapId({
-#         'min': ndwi_stats['NDWI_min'], 
-#         'max': ndwi_stats['NDWI_max'], 
-#         'palette': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']
-#     })
-#     mndwi_params = mndwi_mosaic.getMapId({
-#         'min': mndwi_stats['MNDWI_min'], 
-#         'max': mndwi_stats['MNDWI_max'], 
-#         'palette': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']
-#     })
-
-#     # Extract only the tile URLs from the parameters
-#     ndvi_tile_url = ndvi_params['tile_fetcher'].url_format
-#     evi_tile_url = evi_params['tile_fetcher'].url_format
-#     ndwi_tile_url = ndwi_params['tile_fetcher'].url_format
-#     mndwi_tile_url = mndwi_params['tile_fetcher'].url_format
-
-#     # Define legends for the indices
-#     legend = {
-#         'NDVI': {
-#             'Green': 'High vegetation (healthy plant growth)(High values)',
-#             'Yellow': 'Moderate vegetation (sparse or stressed plants) ',
-#             'Cyan': 'Low vegetation or bare soil',
-#             'Blue': 'Water bodies(Low values)'
-#         },
-#         'EVI': {
-#             'Green': 'High vegetation (High values)',
-#             'Yellow': 'Moderate vegetation ',
-#             'Brown': 'Low vegetation or bare soil',
-#             'Red': 'Water bodies (Low values)'
-#         },
-#         'NDWI': {
-#             'Blue': 'Water bodies',
-#             'Gray': 'Land'
-#         },
-#         'MNDWI': {
-#             'Blue': 'Water bodies',
-#             'Gray': 'Land'
-#         }
-#     }
-
-#     # Prepare index range for frontend display
-#     stats = {
-#         'NDVI_min': ndvi_stats['NDVI_min'],
-#         'NDVI_max': ndvi_stats['NDVI_max'],
-#         'EVI_min': evi_stats['EVI_min'],
-#         'EVI_max': evi_stats['EVI_max'],
-#         'NDWI_min': ndwi_stats['NDWI_min'],
-#         'NDWI_max': ndwi_stats['NDWI_max'],
-#         'MNDWI_min': mndwi_stats['MNDWI_min'],
-#         'MNDWI_max': mndwi_stats['MNDWI_max']
-#     }
-    
-#     palletes = {
-#         'NDVI': ['blue', 'cyan', 'yellow', 'green'],
-#         'EVI': ['#228B22', '#ADFF2F', '#FFFF00', '#8B4513'],
-#         'NDWI': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF'],
-#         'MNDWI': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']
-#     }
-
-#     # Return the statistics, visualization parameters, and index range
-#     return jsonify({
-#         'ndvi_stats': ndvi_stats,
-#         'evi_stats': evi_stats,
-#         'ndwi_stats': ndwi_stats,
-#         'mndwi_stats': mndwi_stats,
-#         'ndvi_tile_url': ndvi_tile_url,
-#         'evi_tile_url': evi_tile_url,
-#         'ndwi_tile_url': ndwi_tile_url,
-#         'mndwi_tile_url': mndwi_tile_url,
-#         'legend': legend,
-#         'index_range': stats,
-#         'pallete': palletes  
-#     })
-
-
-# @app.route('/get-ndvi-for-area', methods=['POST'])
-# def get_ndvi_for_area():
-#     # Extract the user input from the request
-#     data = request.json
-#     print("Received data:", data) 
-#     coordinates = data.get('coordinates') 
-#     start_date = data.get('start_date')
-#     end_date = data.get('end_date')
-
-#     # Define area of interest (from user-provided polygon coordinates)
-#     aoi = ee.Geometry.Polygon(coordinates).simplify(1)
-
-#     # Load and filter Sentinel-2 image collection
-#     image_collection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') \
-#         .filterBounds(aoi) \
-#         .filterDate(start_date, end_date) \
-#         .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) \
-#         .limit(10)
-
-#     # Check if the image collection has any images after filtering
-#     image_count = image_collection.size().getInfo()
-#     print(f"Number of images found: {image_count}") 
-#     if image_count == 0:
-#         return jsonify({
-#             'error': 'No images available for the given date range and area with acceptable cloud cover.'
-#         }), 404
-
-#     # Calculate indices in parallel and create mosaics
-#     ndvi_mosaic = image_collection.map(calculate_ndvi).mean().clip(aoi)
-#     evi_mosaic = image_collection.map(calculate_evi).mean().clip(aoi)
-#     ndwi_mosaic = image_collection.map(calculate_ndwi).mean().clip(aoi)
-#     mndwi_mosaic = image_collection.map(calculate_mndwi).mean().clip(aoi)
-
-#     # Reduce to get statistics for each index separately
-#     ndvi_stats = ndvi_mosaic.reduceRegion(
-#         reducer=ee.Reducer.minMax(),
-#         geometry=aoi,
-#         scale=30,
-#         maxPixels=1e8
-#     ).getInfo()
-
-#     evi_stats = evi_mosaic.reduceRegion(
-#         reducer=ee.Reducer.minMax(),
-#         geometry=aoi,
-#         scale=30,
-#         maxPixels=1e8
-#     ).getInfo()
-
-#     ndwi_stats = ndwi_mosaic.reduceRegion(
-#         reducer=ee.Reducer.minMax(),
-#         geometry=aoi,
-#         scale=30,
-#         maxPixels=1e8
-#     ).getInfo()
-
-#     mndwi_stats = mndwi_mosaic.reduceRegion(
-#         reducer=ee.Reducer.minMax(),
-#         geometry=aoi,
-#         scale=30,
-#         maxPixels=1e8
-#     ).getInfo()
-
-#     # Generate the map visualizations
-#     ndvi_params = ndvi_mosaic.getMapId({'min': ndvi_stats['NDVI_min'], 'max': ndvi_stats['NDVI_max'], 'palette': ['blue', 'cyan', 'yellow', 'green']})
-#     evi_params = evi_mosaic.getMapId({'min': evi_stats['EVI_min'], 'max': evi_stats['EVI_max'], 'palette': ['#228B22', '#ADFF2F', '#FFFF00', '#8B4513']})
-#     ndwi_params = ndwi_mosaic.getMapId({'min': ndwi_stats['NDWI_min'], 'max': ndwi_stats['NDWI_max'], 'palette': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']})
-#     mndwi_params = mndwi_mosaic.getMapId({'min': mndwi_stats['MNDWI_min'], 'max': mndwi_stats['MNDWI_max'], 'palette': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']})
-
-#     # Define legends for the indices
-#     legend = {
-#         'NDVI': {
-#             'Green': 'High vegetation (healthy plant growth)(High values)',
-#             'Yellow': 'Moderate vegetation (sparse or stressed plants)',
-#             'Cyan': 'Low vegetation or bare soil',
-#             'Blue': 'Water bodies(Low values)'
-#         },
-#         'EVI': {
-#             'Green': 'High vegetation (High values)',
-#             'Yellow': 'Moderate vegetation',
-#             'Brown': 'Low vegetation or bare soil',
-#             'Red': 'Water bodies (Low values)'
-#         },
-#         'NDWI': {
-#             'Blue': 'Water bodies',
-#             'Gray': 'Land'
-#         },
-#         'MNDWI': {
-#             'Blue': 'Water bodies',
-#             'Gray': 'Land'
-#         }
-#     }
-
-#     # Prepare index range for frontend display
-#     stats = {
-#         'NDVI_min': ndvi_stats['NDVI_min'],
-#         'NDVI_max': ndvi_stats['NDVI_max'],
-#         'EVI_min': evi_stats['EVI_min'],
-#         'EVI_max': evi_stats['EVI_max'],
-#         'NDWI_min': ndwi_stats['NDWI_min'],
-#         'NDWI_max': ndwi_stats['NDWI_max'],
-#         'MNDWI_min': mndwi_stats['MNDWI_min'],
-#         'MNDWI_max': mndwi_stats['MNDWI_max']
-#     }
-
-#     palletes = {
-#         'NDVI': ['blue', 'cyan', 'yellow', 'green'],
-#         'EVI': ['#228B22', '#ADFF2F', '#FFFF00', '#8B4513'],
-#         'NDWI': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF'],
-#         'MNDWI': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']
-#     }
-
-#     # Return the result
-#     return jsonify({
-#         'ndvi_stats': ndvi_stats,
-#         'evi_stats': evi_stats,
-#         'ndwi_stats': ndwi_stats,
-#         'mndwi_stats': mndwi_stats,
-#         'ndvi_tile_url': ndvi_params['tile_fetcher'].url_format,
-#         'evi_tile_url': evi_params['tile_fetcher'].url_format,
-#         'ndwi_tile_url': ndwi_params['tile_fetcher'].url_format,
-#         'mndwi_tile_url': mndwi_params['tile_fetcher'].url_format,
-#         'legend': legend,
-#         'index_range': stats,
-#         'pallete': palletes
-#     })
 
 @app.route('/get-ndvi-for-area', methods=['POST'])
 def get_ndvi_for_area():

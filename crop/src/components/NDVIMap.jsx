@@ -436,6 +436,7 @@ function NDVIMap() {
               <option value="EVI">Enhanced Vegetation Index (EVI)</option>
               <option value="NDWI">Normalized Difference Water Index (NDWI)</option>
               <option value="MNDWI">Modified Normalized Difference Water Index (MNDWI)</option>
+              <option value="VCI">Vegetation Condition Index (VCI)</option>
             </select>
           </div>
 
