@@ -211,6 +211,7 @@ function NDVIMap() {
             draggable: true,
             pauseOnHover: true,
           });
+          console.log("Response Data:", response.data);
 
           if (indexType === 'NDVI') {
             setNdviTileUrl(response.data.ndvi_tile_url || null);
@@ -222,7 +223,16 @@ function NDVIMap() {
             setMndwiTileUrl(response.data.mndwi_tile_url || null);
           }
           setLegend(response.data.legend[indexType] || null);
-          setIndexRange(response.data.index_range[indexType] || null);
+          const indexRangeData = response.data.index_range;
+          console.log("Index Range from Response:", indexRangeData); // Log index range data
+
+          // Set the index range state
+          setIndexRange({
+            min: indexRangeData[indexType + '_min'],
+            max: indexRangeData[indexType + '_max']
+          });
+
+          setPalette(response.data.pallete[indexType] || null);
           setTimeout(() => setLoading(false), 3000);
         }
       } catch (error) {
@@ -237,6 +247,7 @@ function NDVIMap() {
       }
     }
   };
+  
   const handleMapClick = async (event) => {
     const { lat, lng } = event.latlng;
 
@@ -273,6 +284,9 @@ function NDVIMap() {
       console.error('Error fetching index value:', error);
     }
   };
+
+  console.log("Index Range:", indexRange);
+  console.log("Palettes:", palette);
 
   // const fetchNDVIForYearRange = async () => {
   //   if (!startDate || !endDate) {
@@ -529,13 +543,35 @@ function NDVIMap() {
             />
           </div>
         )}
-        {indexRange && indexRange[indexType + '_min'] !== undefined && indexRange[indexType + '_max'] !== undefined && (
+
+        {indexRange && (
           <div className="mt-6 p-4 bg-gray-100 rounded-lg shadow-md">
             <h3 className="text-xl font-semibold">Index Range for {indexType}</h3>
-            <p className="text-gray-700">Min: {(indexRange[indexType + '_min']).toFixed(4)}</p>
-            <p className="text-gray-700">Max: {(indexRange[indexType + '_max']).toFixed(4)}</p>
+
+            {/* Check for flat structure (min and max at root level) */}
+            {indexRange.min !== undefined && indexRange.max !== undefined ? (
+              <>
+                <p className="text-gray-700">Min: {indexRange.min.toFixed(4)}</p>
+                <p className="text-gray-700">Max: {indexRange.max.toFixed(4)}</p>
+              </>
+            ) : indexRange[indexType + '_min'] !== undefined && indexRange[indexType + '_max'] !== undefined ? (
+              <>
+                {/* Format 1: Flat keys like NDVI_min, NDVI_max */}
+                <p className="text-gray-700">Min: {indexRange[indexType + '_min'].toFixed(4)}</p>
+                <p className="text-gray-700">Max: {indexRange[indexType + '_max'].toFixed(4)}</p>
+              </>
+            ) : indexRange[indexType]?.min !== undefined && indexRange[indexType]?.max !== undefined ? (
+              <>
+                {/* Format 2: Nested keys */}
+                <p className="text-gray-700">Min: {indexRange[indexType].min.toFixed(4)}</p>
+                <p className="text-gray-700">Max: {indexRange[indexType].max.toFixed(4)}</p>
+              </>
+            ) : (
+              <p className="text-gray-700">Index range data not available.</p>
+            )}
           </div>
         )}
+
 
         {legend && (
           <div className="mt-6 p-4 bg-gray-100 rounded-lg shadow-md">
