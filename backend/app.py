@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify, Response
 from flask_cors import CORS 
 import ee
 import os
+import time
+
 
 app = Flask(__name__)
 CORS(app)
@@ -20,9 +22,9 @@ def calculate_ndvi(image):
 
 
 def calculate_evi(image):
-    nir_band = image.select('B8')  # NIR band
-    red_band = image.select('B4')  # Red band
-    blue_band = image.select('B2')  # Blue band
+    nir_band = image.select('B8') 
+    red_band = image.select('B4')  
+    blue_band = image.select('B2')  
     
     # Normalize by dividing by 10000 (if Sentinel-2 data)
     nir_band = nir_band.divide(10000)
@@ -30,10 +32,14 @@ def calculate_evi(image):
     blue_band = blue_band.divide(10000)
     
     # Constants for EVI
-    G = 2.5  # Gain factor
-    C1 = 6  # Red band coefficient
-    C2 = 7.5  # Blue band coefficient
-    L = 10000  # Canopy background adjustment value
+    # Gain factor
+    G = 2.5 
+    # Red band coefficient 
+    C1 = 6 
+    # Blue band coefficient 
+    C2 = 7.5 
+    # Canopy background adjustment value 
+    L = 10000  
 
     # EVI formula
     evi = nir_band.subtract(red_band).multiply(G).divide(
@@ -80,12 +86,12 @@ def calculate_ndmi(image):
 #     return ci
 
 def calculate_ci(image):
-    nir_band = image.select('B8').divide(10000)  # Sentinel-2 scaling
-    red_band = image.select('B4').divide(10000)  # Sentinel-2 scaling
+    nir_band = image.select('B8').divide(10000)  
+    red_band = image.select('B4').divide(10000)  
     ci = nir_band.divide(red_band).subtract(1).rename('CI')
     
     # Clamp the CI values to a range of 0 to 10
-    ci = ci.clamp(0, 10)  # Clamp values to range 0-10 for better visualization/interpretation
+    ci = ci.clamp(0, 10) 
     
     return ci
 
@@ -118,6 +124,34 @@ def calculate_lai(image):
     
     return lai
 
+
+def export_image_to_drive(vegetation_index, aoi, index_type):
+ 
+    # Export the image to Google Drive
+    task = ee.batch.Export.image.toDrive(
+        image=vegetation_index,
+        description=f"Vegetation_Index_{index_type}",
+        region=aoi,
+        scale=30,
+        fileFormat='GeoTIFF'
+    )
+    task.start()
+
+    # Monitor the export task status
+    while task.status()['state'] not in ['COMPLETED', 'FAILED']:
+        time.sleep(5)  
+    if task.status()['state'] == 'COMPLETED':
+        download_url = task.status()['destination_uris'][0]
+        print(f"Export successful. Download URL: {download_url}")
+        return download_url
+    else:
+        print(f"Export failed with status: {task.status()}")
+        return None
+
+
+def calculate_rgb(image):
+    """Generates an RGB composite from Sentinel-2 bands."""
+    return image.select(['B4', 'B3', 'B2']).rename(['red', 'green', 'blue'])
 
 
 @app.route('/get-ndvi', methods=['POST'])
@@ -228,7 +262,7 @@ def get_vegetation_index():
         reducer=ee.Reducer.minMax(),
         geometry=aoi,
         scale=30,
-        maxPixels=1e8
+        maxPixels=1e9
     ).getInfo()
     print(f"Stats for {index_type}: {stats}")
 
@@ -269,15 +303,21 @@ def get_vegetation_index():
     })
     print(f"Stats for {index_type}: {stats}")
 
-
-    return jsonify({
-        'tile_url': ndvi_params['tile_fetcher'].url_format,
-        'attribution': 'Google Earth Engine',
-        'legend': legend,
-        'index_range': stats,
-        'palette': palette, 
-    })
-
+    
+    download_url = export_image_to_drive(vegetation_index, aoi, index_type)
+    if download_url:
+   
+        return jsonify({
+            'tile_url': ndvi_params['tile_fetcher'].url_format,
+            'attribution': 'Google Earth Engine',
+            'legend': legend,
+            'index_range': stats,
+            'palette': palette, 
+            'download_url': download_url,
+            'message': 'The vegetation index map is ready for viewing. You can download the imagery now from the provided link.'
+        })
+    else:
+        return jsonify({'error': 'Export failed, please try again later.'}), 500
 
 @app.route('/get-index-values', methods=['POST'])
 def get_index_values():
@@ -288,7 +328,7 @@ def get_index_values():
     longitude = data.get('longitude')
     start_date = data.get('start_date')
     end_date = data.get('end_date')
-
+    
     if not start_date or not end_date:
         return jsonify({"error": "Invalid date range"}), 400
     print(f"Start date: {start_date}, End date: {end_date}")
@@ -367,15 +407,16 @@ def get_ndvi_for_area():
     coordinates = data.get('coordinates') 
     start_date = data.get('start_date')
     end_date = data.get('end_date')
+    index_type = data.get('index')
 
     # Define area of interest (from user-provided polygon coordinates)
-    aoi = ee.Geometry.Polygon(coordinates).simplify(1)
+    aoi = ee.Geometry.Polygon(coordinates)
 
     # Load and filter Sentinel-2 image collection
     image_collection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') \
         .filterBounds(aoi) \
         .filterDate(start_date, end_date) \
-        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) \
+        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 10)) \
         .limit(10)
 
     # Check if the image collection has any images after filtering
@@ -387,49 +428,52 @@ def get_ndvi_for_area():
             'error': 'No images available for the given date range and area with acceptable cloud cover.'
         }), 404
 
-    # Apply NDVI, EVI, NDWI, MNDWI calculations in parallel (since indices are already calculated)
-    ndvi_mosaic = image_collection.map(calculate_ndvi).mean().clip(aoi)
-    evi_mosaic = image_collection.map(calculate_evi).mean().clip(aoi)
-    ndwi_mosaic = image_collection.map(calculate_ndwi).mean().clip(aoi)
-    mndwi_mosaic = image_collection.map(calculate_mndwi).mean().clip(aoi)
-    savi_mosaic = image_collection.map(calculate_savi).mean().clip(aoi)
-    ndmi_mosaic = image_collection.map(calculate_ndmi).mean().clip(aoi)
-    ci_mosaic = image_collection.map(calculate_ci).mean().clip(aoi)
-    lai_mosaic = image_collection.map(calculate_lai).mean().clip(aoi)
 
-    # Use a single reduceRegion operation to fetch statistics for all indices
-    stats = ndvi_mosaic.addBands([evi_mosaic, ndwi_mosaic, mndwi_mosaic, savi_mosaic, ndmi_mosaic, ci_mosaic, lai_mosaic]) \
-        .reduceRegion(
-            reducer=ee.Reducer.minMax().combine(ee.Reducer.mean(), sharedInputs=True),
-            geometry=aoi,
-            scale=30,
-            maxPixels=1e8
-        ).getInfo()
-
-    # Extract statistics
-    ndvi_stats = { 'NDVI_min': stats['NDVI_min'], 'NDVI_max': stats['NDVI_max'] }
-    evi_stats = { 'EVI_min': stats['EVI_min'], 'EVI_max': stats['EVI_max'] }
-    ndwi_stats = { 'NDWI_min': stats['NDWI_min'], 'NDWI_max': stats['NDWI_max'] }
-    mndwi_stats = { 'MNDWI_min': stats['MNDWI_min'], 'MNDWI_max': stats['MNDWI_max'] }
-    savi_stats = { 'SAVI_min': stats['SAVI_min'], 'SAVI_max': stats['SAVI_max'] }
-    ndmi_stats = { 'NDMI_min': stats['NDMI_min'], 'NDMI_max': stats['NDMI_max'] }
-    ci_stats = { 'CI_min': stats['CI_min'], 'CI_max': stats['CI_max'] }
-    lai_stats = { 'LAI_min': stats['LAI_min'], 'LAI_max': stats['LAI_max'] }
-
-    # Generate the map visualizations
-    ndvi_params = ndvi_mosaic.getMapId({'min': ndvi_stats['NDVI_min'], 'max': ndvi_stats['NDVI_max'], 'palette': ['blue', 'cyan', 'yellow', 'green']})
-    evi_params = evi_mosaic.getMapId({'min': evi_stats['EVI_min'], 'max': evi_stats['EVI_max'], 'palette': ['#228B22', '#ADFF2F', '#FFFF00', '#8B4513']})
-    ndwi_params = ndwi_mosaic.getMapId({'min': ndwi_stats['NDWI_min'], 'max': ndwi_stats['NDWI_max'], 'palette': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']})
-    mndwi_params = mndwi_mosaic.getMapId({'min': mndwi_stats['MNDWI_min'], 'max': mndwi_stats['MNDWI_max'], 'palette': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']})
-    savi_params = savi_mosaic.getMapId({'min': savi_stats['SAVI_min'], 'max': savi_stats['SAVI_max'], 'palette': ['#FFA500', '#D2B48C', '#ADFF2F', '#006400']})
-    ndmi_params = ndmi_mosaic.getMapId({'min': ndmi_stats['NDMI_min'], 'max': ndmi_stats['NDMI_max'], 'palette': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']})
-    ci_params = ci_mosaic.getMapId({'min': ci_stats['CI_min'], 'max': ci_stats['CI_max'], 'palette': ["#FF0000", "#FF8C00", "#FFD700", "#006400"]})
-    lai_params = lai_mosaic.getMapId({'min': lai_stats['LAI_min'], 'max': lai_stats['LAI_max'], 'palette': ["#8B4513", "#FFFF99", "#66FF66", "#004D00"]})
-    
+    index_mosaic = None
+    if index_type == 'NDVI':
+        index_mosaic = image_collection.map(calculate_ndvi).mean().clip(aoi)
+    elif index_type == 'EVI':
+        index_mosaic = image_collection.map(calculate_evi).mean().clip(aoi)
+    elif index_type == 'NDWI':
+        index_mosaic = image_collection.map(calculate_ndwi).mean().clip(aoi)
+    elif index_type == 'MNDWI':
+        index_mosaic = image_collection.map(calculate_mndwi).mean().clip(aoi)
+    elif index_type == 'SAVI':
+        index_mosaic = image_collection.map(calculate_savi).mean().clip(aoi)
+    elif index_type == 'NDMI':
+        index_mosaic = image_collection.map(calculate_ndmi).mean().clip(aoi)
+    elif index_type == 'CI':
+        index_mosaic = image_collection.map(calculate_ci).mean().clip(aoi)
+    elif index_type == 'LAI':
+        index_mosaic = image_collection.map(calculate_lai).mean().clip(aoi)
 
 
-    # Define legends for the indices
-    legend = {
+    stats = index_mosaic.reduceRegion(
+        reducer=ee.Reducer.minMax().combine(ee.Reducer.mean(), sharedInputs=True),
+        geometry=aoi,
+        scale=30,
+        maxPixels=1e9,
+        bestEffort=True
+    ).getInfo()
+
+    index_params = index_mosaic.getMapId({'min': stats[f'{index_type}_min'], 'max': stats[f'{index_type}_max'], 'palette': get_palette(index_type)})
+
+    download_url = export_image_to_drive(index_mosaic, aoi, index_type)
+
+    return jsonify({
+        f'{index_type}_tile_url': index_params['tile_fetcher'].url_format,
+        'legend': get_legend(index_type),
+        'palette': get_palette(index_type),
+        'index_range': {
+            f'{index_type}_min': stats[f'{index_type}_min'],
+            f'{index_type}_max': stats[f'{index_type}_max'],
+        },
+        f'{index_type}_download_url': download_url,
+    })
+
+
+def get_legend(index_type):
+    legends = {
         'NDVI': {
             'Green': 'Dense vegetation (healthy plant growth)(High values)',
             'Yellow': 'Moderate vegetation (sparse or stressed plants)',
@@ -454,54 +498,35 @@ def get_ndvi_for_area():
             '#D3D3D3': 'Low water content or exposed land',
             '#8B4513': 'Dry land or bare soil (Very low values)'
         },
-        'SAVI':  {
+        'SAVI': {
             '#006400': 'Dense vegetation (High SAVI values)',
             '#ADFF2F': 'Moderate vegetation (Sparse or less dense vegetation)',
             '#D2B48C': 'Bare soil or minimal vegetation',
             '#FFA500': 'Dry areas or exposed soil (Low SAVI values)'
         },
-        'NDMI':  {
+        'NDMI': {
             '#0000FF': 'High moisture content (e.g., water bodies, wet vegetation)',
             '#87CEEB': 'Moderate moisture (e.g., healthy vegetation)',
             '#D3D3D3': 'Low moisture content (e.g., stressed vegetation)',
             '#8B4513': 'Dry or barren areas (Low NDMI values)'
         },
-        'CI':   {
+        'CI': {
             '#006400': 'High chlorophyll content (Healthy plants)',
             '#FFD700': 'Moderate chlorophyll content (Stressed vegetation)',
             '#FF8C00': 'Low chlorophyll content (Unhealthy or sparse vegetation)',
             '#FF0000': 'Minimal or no chlorophyll (Dead vegetation or bare soil)'
         },
-        'LAI':  {
+        'LAI': {
             '#004D00': 'Dense vegetation canopy (High LAI values)',
             '#66FF66': 'Moderate vegetation canopy',
             '#FFFF99': 'Sparse vegetation',
             '#8B4513': 'Minimal vegetation or bare soil'
         }
-
     }
+    return legends.get(index_type, {})
 
-    # Prepare index range for frontend display
-    stats_response = {
-        'NDVI_min': ndvi_stats['NDVI_min'],
-        'NDVI_max': ndvi_stats['NDVI_max'],
-        'EVI_min': evi_stats['EVI_min'],
-        'EVI_max': evi_stats['EVI_max'],
-        'NDWI_min': ndwi_stats['NDWI_min'],
-        'NDWI_max': ndwi_stats['NDWI_max'],
-        'MNDWI_min': mndwi_stats['MNDWI_min'],
-        'MNDWI_max': mndwi_stats['MNDWI_max'],
-        'SAVI_min': savi_stats['SAVI_min'],
-        'SAVI_max': savi_stats['SAVI_max'],
-        'NDMI_min': ndmi_stats['NDMI_min'],
-        'NDMI_max': ndmi_stats['NDMI_max'],
-        'CI_min': ci_stats['CI_min'],
-        'CI_max': ci_stats['CI_max'],
-        'LAI_min': lai_stats['LAI_min'],
-        'LAI_max': lai_stats['LAI_max'],
-    }
-
-    palletes = {
+def get_palette(index_type):
+    palettes = {
         'NDVI': ['blue', 'cyan', 'yellow', 'green'],
         'EVI': ['#228B22', '#ADFF2F', '#FFFF00', '#8B4513'],
         'NDWI': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF'],
@@ -511,33 +536,7 @@ def get_ndvi_for_area():
         'CI': ["#FF0000", "#FF8C00", "#FFD700", "#006400"],
         'LAI': ["#8B4513", "#FFFF99", "#66FF66", "#004D00"],
     }
-
-    # Return the result
-    return jsonify({
-        'ndvi_stats': ndvi_stats,
-        'evi_stats': evi_stats,
-        'ndwi_stats': ndwi_stats,
-        'mndwi_stats': mndwi_stats,
-        'savi_stats': savi_stats,
-        'ndmi_stats': ndmi_stats,
-        'ci_stats': ci_stats,
-        'lai_stats': lai_stats,
-        'ndvi_tile_url': ndvi_params['tile_fetcher'].url_format,
-        'evi_tile_url': evi_params['tile_fetcher'].url_format,
-        'ndwi_tile_url': ndwi_params['tile_fetcher'].url_format,
-        'mndwi_tile_url': mndwi_params['tile_fetcher'].url_format,
-        'savi_tile_url': savi_params['tile_fetcher'].url_format,
-        'ndmi_tile_url': ndmi_params['tile_fetcher'].url_format,
-        'ci_tile_url': ci_params['tile_fetcher'].url_format,
-        'lai_tile_url': lai_params['tile_fetcher'].url_format,
-        'legend': legend,
-        'index_range': stats_response,
-        'pallete': palletes
-    })
-
-
-
-
+    return palettes.get(index_type, [])
 
 @app.route('/get-ndvi-for-year-range', methods=['POST'])
 def get_ndvi_for_year_range():

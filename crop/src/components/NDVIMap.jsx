@@ -11,6 +11,7 @@ import { IoMdHome } from "react-icons/io";
 import { FaRedoAlt } from 'react-icons/fa';
 import { Line } from 'react-chartjs-2';
 import { toast } from 'react-toastify';
+import { FiDownload } from 'react-icons/fi';
 import {
   Chart as ChartJS,
   LineElement,
@@ -53,6 +54,8 @@ function NDVIMap() {
   const [tilesLoaded, setTilesLoaded] = useState(false);
   const [indexRange, setIndexRange] = useState(null);
   const [palette, setPalette] = useState([]);
+  const [downloadUrl, setDownloadUrl] = useState(null);
+
 
   React.useEffect(() => {
     startDateRef.current = startDate;
@@ -105,7 +108,7 @@ function NDVIMap() {
       pauseOnHover: true,
     });
     try {
-      const response = await axios.post('http://127.0.0.1:5000/get-ndvi', {
+      const response = await axios.post('https://backend-crop-analysis-1.onrender.com/get-ndvi', {
         coordinates: [coordinates.lonMin, coordinates.latMin, coordinates.lonMax, coordinates.latMax],
         start_date: startDateRef.current,
         end_date: endDateRef.current,
@@ -121,6 +124,7 @@ function NDVIMap() {
           pauseOnHover: true,
         });
         setTileUrl(response.data.tile_url);
+        setDownloadUrl(response.data.download_url);
         setLegend(response.data.legend);
         setIndexRange(response.data.index_range);
         setPalette(response.data.palette);
@@ -198,7 +202,7 @@ function NDVIMap() {
       console.log('Sending coordinates:', coordinates);
 
       try {
-        const response = await axios.post('http://127.0.0.1:5000/get-ndvi-for-area', {
+        const response = await axios.post('https://backend-crop-analysis-1.onrender.com/get-ndvi-for-area', {
           coordinates: coordinates,
           start_date: startDateRef.current,
           end_date: endDateRef.current,
@@ -217,26 +221,11 @@ function NDVIMap() {
           });
           console.log("Response Data:", response.data);
 
-          if (indexType === 'NDVI') {
-            setNdviTileUrl(response.data.ndvi_tile_url || null);
-          } else if (indexType === 'EVI') {
-            setEviTileUrl(response.data.evi_tile_url || null);
-          } else if (indexType === 'NDWI') {
-            setNdwiTileUrl(response.data.ndwi_tile_url || null);
-          } else if (indexType === 'MNDWI') {
-            setMndwiTileUrl(response.data.mndwi_tile_url || null);
-          } else if (indexType === 'SAVI') {
-            setSaviTileUrl(response.data.savi_tile_url || null);
-          } else if (indexType === 'NDMI') {
-            setNdmiTileUrl(response.data.ndmi_tile_url || null);
-          } else if (indexType === 'CI') {
-            setCiTileUrl(response.data.ci_tile_url || null);
-          }else if (indexType === 'LAI') {
-            setLaiTileUrl(response.data.lai_tile_url || null);
-          }
-          setLegend(response.data.legend[indexType] || null);
+          setTileUrl(response.data[`${indexType}_tile_url`] || null);
+          setDownloadUrl(response.data[`${indexType}_download_url`] || null);
+          setLegend(response.data.legend);
           const indexRangeData = response.data.index_range;
-          console.log("Index Range from Response:", indexRangeData); // Log index range data
+          console.log("Index Range from Response:", indexRangeData);
 
           // Set the index range state
           setIndexRange({
@@ -244,8 +233,11 @@ function NDVIMap() {
             max: indexRangeData[indexType + '_max']
           });
 
-          setPalette(response.data.pallete[indexType] || null);
+          // setPalette(response.data.palette[indexType] || null);
+          setPalette(response.data.palette);
           setTimeout(() => setLoading(false), 3000);
+          console.log("Legend:", legend);
+          console.log("Palette:", palette);
         }
       } catch (error) {
         setLoading(false)
@@ -259,7 +251,7 @@ function NDVIMap() {
       }
     }
   };
-  
+
   const handleMapClick = async (event) => {
     const { lat, lng } = event.latlng;
 
@@ -275,7 +267,7 @@ function NDVIMap() {
     setIndexValue(null);
 
     try {
-      const response = await axios.post('http://127.0.0.1:5000/get-index-values', {
+      const response = await axios.post('https://backend-crop-analysis-1.onrender.com/get-index-values', {
         latitude: lat,
         longitude: lng,
         start_date: startDateRef.current,
@@ -398,6 +390,8 @@ function NDVIMap() {
     setIndexValue(null);
     setPopupPosition(null);
     setSelectedArea(null);
+    setStartDate('');
+    setEndDate('')
 
     const map = document.querySelector('.leaflet-container')?.leafletElement;
     if (map) {
@@ -409,7 +403,14 @@ function NDVIMap() {
     }
   };
 
-
+  const handleDownload = () => {
+    if (downloadUrl) {
+      window.open(downloadUrl, '_blank');
+      
+    } else {
+      alert('The image is still being processed. Please wait.');
+    }
+  };
 
   return (
     <div className="relative">
@@ -614,7 +615,7 @@ function NDVIMap() {
 
         {showDateModal && (
           <div className="fixed inset-0 bg-gray-600/50 flex justify-center items-center z-50">
-            <div className="bg-white p-6 rounded-lg shadow-lg w-96 z-50">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-100 z-50">
               <h3 className="text-xl font-semibold">Select Date Range and Index</h3>
               <div className="space-y-4 mt-4">
                 <div className="flex flex-col">
@@ -648,7 +649,7 @@ function NDVIMap() {
                 </div>
                 <div className="flex flex-col">
                   <label className="font-semibold">Select Index:</label>
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     {['NDVI', 'EVI', 'NDWI', 'MNDWI', 'SAVI', 'NDMI', 'CI', 'LAI'].map((index) => (
                       <div key={index} className="flex items-center">
                         <input
@@ -708,6 +709,7 @@ function NDVIMap() {
                 circle: false,
                 marker: false,
               }} />
+              
             </FeatureGroup>
             <ZoomToArea />
             {tileUrl && <NDVILayer />}
@@ -744,6 +746,16 @@ function NDVIMap() {
           >
             <FaRedoAlt size={14} />
           </button>
+          {tileUrl && (
+            <button
+              onClick={handleDownload}
+              className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white text-gray-700 text-sm px-4 py-2 rounded-lg shadow-md  z-[1000] flex items-center justify-center"
+            >
+              <FiDownload className="mr-2" size={20} />
+              Download {indexType} Image
+            </button>
+          )}
+          
         </div>
 
 
