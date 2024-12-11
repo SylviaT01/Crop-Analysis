@@ -36,6 +36,10 @@ function NDVIMap() {
   const [eviTileUrl, setEviTileUrl] = useState(null);
   const [ndwiTileUrl, setNdwiTileUrl] = useState(null);
   const [mndwiTileUrl, setMndwiTileUrl] = useState(null);
+  const [saviTileUrl, setSaviTileUrl] = useState(null);
+  const [ndmiTileUrl, setNdmiTileUrl] = useState(null);
+  const [ciTileUrl, setCiTileUrl] = useState(null);
+  const [laiTileUrl, setLaiTileUrl] = useState(null);
   const [legend, setLegend] = useState(null);
   const [indexValue, setIndexValue] = useState(null);
   const [popupPosition, setPopupPosition] = useState(null);
@@ -221,6 +225,14 @@ function NDVIMap() {
             setNdwiTileUrl(response.data.ndwi_tile_url || null);
           } else if (indexType === 'MNDWI') {
             setMndwiTileUrl(response.data.mndwi_tile_url || null);
+          } else if (indexType === 'SAVI') {
+            setSaviTileUrl(response.data.savi_tile_url || null);
+          } else if (indexType === 'NDMI') {
+            setNdmiTileUrl(response.data.ndmi_tile_url || null);
+          } else if (indexType === 'CI') {
+            setCiTileUrl(response.data.ci_tile_url || null);
+          }else if (indexType === 'LAI') {
+            setLaiTileUrl(response.data.lai_tile_url || null);
           }
           setLegend(response.data.legend[indexType] || null);
           const indexRangeData = response.data.index_range;
@@ -377,6 +389,10 @@ function NDVIMap() {
     setEviTileUrl(null);
     setNdwiTileUrl(null);
     setMndwiTileUrl(null);
+    setSaviTileUrl(null);
+    setNdmiTileUrl(null);
+    setCiTileUrl(null);
+    setLaiTileUrl(null);
     setLegend(null);
     setIndexRange(null);
     setIndexValue(null);
@@ -436,7 +452,10 @@ function NDVIMap() {
               <option value="EVI">Enhanced Vegetation Index (EVI)</option>
               <option value="NDWI">Normalized Difference Water Index (NDWI)</option>
               <option value="MNDWI">Modified Normalized Difference Water Index (MNDWI)</option>
-              <option value="VCI">Vegetation Condition Index (VCI)</option>
+              <option value="SAVI">Soil-Adjusted Vegetation Index (SAVI)</option>
+              <option value="NDMI">Normalized Difference Moisture Index (NDMI)</option>
+              <option value="CI">Chlorophyll Index (CI)</option>
+              <option value="LAI">Leaf Area Index (LAI)</option>
             </select>
           </div>
 
@@ -630,7 +649,7 @@ function NDVIMap() {
                 <div className="flex flex-col">
                   <label className="font-semibold">Select Index:</label>
                   <div className="space-y-2">
-                    {['NDVI', 'EVI', 'NDWI', 'MNDWI'].map((index) => (
+                    {['NDVI', 'EVI', 'NDWI', 'MNDWI', 'SAVI', 'NDMI', 'CI', 'LAI'].map((index) => (
                       <div key={index} className="flex items-center">
                         <input
                           type="radio"
@@ -696,6 +715,10 @@ function NDVIMap() {
             {eviTileUrl && <TileLayer url={eviTileUrl} />}
             {ndwiTileUrl && <TileLayer url={ndwiTileUrl} />}
             {mndwiTileUrl && <TileLayer url={mndwiTileUrl} />}
+            {saviTileUrl && <TileLayer url={saviTileUrl} />}
+            {ndmiTileUrl && <TileLayer url={ndmiTileUrl} />}
+            {ciTileUrl && <TileLayer url={ciTileUrl} />}
+            {laiTileUrl && <TileLayer url={laiTileUrl} />}
             {popupPosition && indexValue && (
               <Popup
                 position={popupPosition}

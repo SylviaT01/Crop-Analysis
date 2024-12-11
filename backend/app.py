@@ -72,6 +72,54 @@ def calculate_ndmi(image):
     ndmi = nir_band.subtract(swir_band).divide(nir_band.add(swir_band)).rename('NDMI')
     return ndmi
 
+# #Chlorophyll index
+# def calculate_ci(image):
+#     nir_band = image.select('B8')
+#     red_band = image.select('B4')
+#     ci = nir_band.divide(red_band).subtract(1).rename('CI')
+#     return ci
+
+def calculate_ci(image):
+    nir_band = image.select('B8').divide(10000)  # Sentinel-2 scaling
+    red_band = image.select('B4').divide(10000)  # Sentinel-2 scaling
+    ci = nir_band.divide(red_band).subtract(1).rename('CI')
+    
+    # Clamp the CI values to a range of 0 to 10
+    ci = ci.clamp(0, 10)  # Clamp values to range 0-10 for better visualization/interpretation
+    
+    return ci
+
+def calculate_lai_from_ndvi(ndvi, a=3.5, b=-0.5):
+    """
+    Calculate LAI from the given NDVI image using a linear relationship.
+    Parameters:
+    - ndvi: NDVI image.
+    - a: Coefficient for LAI calculation (default 3.5).
+    - b: Intercept for LAI calculation (default -0.5).
+    Returns:
+    - LAI image.
+    """
+    lai = ndvi.multiply(a).add(b).rename('LAI')
+    return lai
+
+def calculate_lai(image):
+    """
+    Calculate LAI directly from the input image by chaining NDVI and LAI calculations.
+    Parameters:
+    - image: Input image with necessary bands (e.g., B8 for NIR, B4 for Red).
+    Returns:
+    - LAI image.
+    """
+    # Step 1: Calculate NDVI
+    ndvi = calculate_ndvi(image)
+    
+    # Step 2: Calculate LAI from NDVI
+    lai = calculate_lai_from_ndvi(ndvi)
+    
+    return lai
+
+
+
 @app.route('/get-ndvi', methods=['POST'])
 def get_vegetation_index():
     data = request.json
@@ -79,6 +127,7 @@ def get_vegetation_index():
     start_date = data.get('start_date')
     end_date = data.get('end_date')
     index_type = data.get('index', 'NDVI')  
+
 
     aoi = ee.Geometry.Rectangle(coordinates)
 
@@ -101,6 +150,7 @@ def get_vegetation_index():
             'error': 'No images available for the given date range and area with acceptable cloud cover.'
 
         }), 404
+
 
     # Calculate the requested vegetation index
     if index_type == 'NDVI':
@@ -135,6 +185,38 @@ def get_vegetation_index():
             '#D3D3D3': 'Low water content or exposed land',
             '#8B4513': 'Dry land or bare soil (Very low values)'
         }
+    elif index_type == 'SAVI':
+        vegetation_index = calculate_savi(image)
+        legend = {
+            '#006400': 'Dense vegetation (High SAVI values)',
+            '#ADFF2F': 'Moderate vegetation (Sparse or less dense vegetation)',
+            '#D2B48C': 'Bare soil or minimal vegetation',
+            '#FFA500': 'Dry areas or exposed soil (Low SAVI values)'
+        }
+    elif index_type == 'NDMI':
+        vegetation_index = calculate_ndmi(image)
+        legend = {
+            '#0000FF': 'High moisture content (e.g., water bodies, wet vegetation)',
+            '#87CEEB': 'Moderate moisture (e.g., healthy vegetation)',
+            '#D3D3D3': 'Low moisture content (e.g., stressed vegetation)',
+            '#8B4513': 'Dry or barren areas (Low NDMI values)'
+        }
+    elif index_type == 'CI':
+        vegetation_index = calculate_ci(image)
+        legend = {
+            '#006400': 'High chlorophyll content (Healthy plants)',
+            '#FFD700': 'Moderate chlorophyll content (Stressed vegetation)',
+            '#FF8C00': 'Low chlorophyll content (Unhealthy or sparse vegetation)',
+            '#FF0000': 'Minimal or no chlorophyll (Dead vegetation or bare soil)'
+        }
+    elif index_type == 'LAI':
+        vegetation_index = calculate_lai(image)
+        legend = {
+            '#004D00': 'Dense vegetation canopy (High LAI values)',
+            '#66FF66': 'Moderate vegetation canopy',
+            '#FFFF99': 'Sparse vegetation',
+            '#8B4513': 'Minimal vegetation or bare soil'
+        }
     
     else:
         return jsonify({
@@ -160,23 +242,16 @@ def get_vegetation_index():
         palette = ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']
     elif index_type == 'EVI':
         palette = ['#0000FF', '#D2B48C', '#ADFF2F', '#006400']
+    elif index_type == 'SAVI':
+        palette = ['#FFA500', '#D2B48C', '#ADFF2F', '#006400']
+    elif index_type == 'NDMI':
+        palette = ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF'] 
+    elif index_type == 'CI':
+        palette = ["#FF0000", "#FF8C00", "#FFD700", "#006400"]
+    elif index_type == 'LAI':
+        palette = ["#8B4513", "#FFFF99", "#66FF66", "#004D00"] 
     else:  
         palette = ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']
-
-    # Generate map URL with correct color palette and value range
-    # ndvi_params = vegetation_index.getMapId({
-    #     'min': stats['NDWI_min'] if index_type == 'NDWI' else 
-    #         stats['NDVI_min'] if index_type == 'NDVI' else 
-    #         stats['EVI_min'] if index_type == 'EVI' else
-    #         stats['VCI_min'] if index_type == 'VCI' else
-    #         stats['MNDWI_min'],
-    #     'max': stats['NDWI_max'] if index_type == 'NDWI' else 
-    #         stats['NDVI_max'] if index_type == 'NDVI' else 
-    #         stats['EVI_max'] if index_type == 'EVI' else
-    #         stats['VCI_max'] if index_type == 'VCI' else
-    #         stats['MNDWI_max'],
-    #     'palette': palette  
-    # })
 
     # Generate map URL with correct color palette and value range
     min_value = stats.get(f'{index_type}_min', None)
@@ -244,9 +319,13 @@ def get_index_values():
     evi = calculate_evi(image)
     ndwi = calculate_ndwi(image)
     mndwi = calculate_mndwi(image)
+    savi = calculate_savi(image)
+    ndmi = calculate_ndmi(image)
+    ci = calculate_ci(image)
+    lai = calculate_lai(image)
 
     # Combine all indices into a single image
-    combined_image = ndvi.addBands([evi, ndwi, mndwi])
+    combined_image = ndvi.addBands([evi, ndwi, mndwi, savi, ndmi, ci, lai])
 
     # Sample the values of all indices at the point
     sampled_values = combined_image.sample(point, 10).first().getInfo()
@@ -258,6 +337,10 @@ def get_index_values():
         evi_value = properties.get('EVI')
         ndwi_value = properties.get('NDWI')
         mndwi_value = properties.get('MNDWI')
+        savi_value = properties.get('SAVI')
+        ndmi_value = properties.get('NDMI')
+        ci_value = properties.get('CI')
+        lai_value = properties.get('LAI')
     else:
         return jsonify({
             'error': 'Failed to retrieve values at the given location.'
@@ -268,7 +351,11 @@ def get_index_values():
         'ndvi_value': ndvi_value,
         'evi_value': evi_value,
         'ndwi_value': ndwi_value,
-        'mndwi_value': mndwi_value
+        'mndwi_value': mndwi_value,
+        'savi_value': savi_value,
+        'ndmi_value': ndmi_value,
+        'ci_value': ci_value,
+        'lai_value': lai_value,
     })
 
 
@@ -305,9 +392,13 @@ def get_ndvi_for_area():
     evi_mosaic = image_collection.map(calculate_evi).mean().clip(aoi)
     ndwi_mosaic = image_collection.map(calculate_ndwi).mean().clip(aoi)
     mndwi_mosaic = image_collection.map(calculate_mndwi).mean().clip(aoi)
+    savi_mosaic = image_collection.map(calculate_savi).mean().clip(aoi)
+    ndmi_mosaic = image_collection.map(calculate_ndmi).mean().clip(aoi)
+    ci_mosaic = image_collection.map(calculate_ci).mean().clip(aoi)
+    lai_mosaic = image_collection.map(calculate_lai).mean().clip(aoi)
 
     # Use a single reduceRegion operation to fetch statistics for all indices
-    stats = ndvi_mosaic.addBands([evi_mosaic, ndwi_mosaic, mndwi_mosaic]) \
+    stats = ndvi_mosaic.addBands([evi_mosaic, ndwi_mosaic, mndwi_mosaic, savi_mosaic, ndmi_mosaic, ci_mosaic, lai_mosaic]) \
         .reduceRegion(
             reducer=ee.Reducer.minMax().combine(ee.Reducer.mean(), sharedInputs=True),
             geometry=aoi,
@@ -320,12 +411,22 @@ def get_ndvi_for_area():
     evi_stats = { 'EVI_min': stats['EVI_min'], 'EVI_max': stats['EVI_max'] }
     ndwi_stats = { 'NDWI_min': stats['NDWI_min'], 'NDWI_max': stats['NDWI_max'] }
     mndwi_stats = { 'MNDWI_min': stats['MNDWI_min'], 'MNDWI_max': stats['MNDWI_max'] }
+    savi_stats = { 'SAVI_min': stats['SAVI_min'], 'SAVI_max': stats['SAVI_max'] }
+    ndmi_stats = { 'NDMI_min': stats['NDMI_min'], 'NDMI_max': stats['NDMI_max'] }
+    ci_stats = { 'CI_min': stats['CI_min'], 'CI_max': stats['CI_max'] }
+    lai_stats = { 'LAI_min': stats['LAI_min'], 'LAI_max': stats['LAI_max'] }
 
     # Generate the map visualizations
     ndvi_params = ndvi_mosaic.getMapId({'min': ndvi_stats['NDVI_min'], 'max': ndvi_stats['NDVI_max'], 'palette': ['blue', 'cyan', 'yellow', 'green']})
     evi_params = evi_mosaic.getMapId({'min': evi_stats['EVI_min'], 'max': evi_stats['EVI_max'], 'palette': ['#228B22', '#ADFF2F', '#FFFF00', '#8B4513']})
     ndwi_params = ndwi_mosaic.getMapId({'min': ndwi_stats['NDWI_min'], 'max': ndwi_stats['NDWI_max'], 'palette': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']})
     mndwi_params = mndwi_mosaic.getMapId({'min': mndwi_stats['MNDWI_min'], 'max': mndwi_stats['MNDWI_max'], 'palette': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']})
+    savi_params = savi_mosaic.getMapId({'min': savi_stats['SAVI_min'], 'max': savi_stats['SAVI_max'], 'palette': ['#FFA500', '#D2B48C', '#ADFF2F', '#006400']})
+    ndmi_params = ndmi_mosaic.getMapId({'min': ndmi_stats['NDMI_min'], 'max': ndmi_stats['NDMI_max'], 'palette': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']})
+    ci_params = ci_mosaic.getMapId({'min': ci_stats['CI_min'], 'max': ci_stats['CI_max'], 'palette': ["#FF0000", "#FF8C00", "#FFD700", "#006400"]})
+    lai_params = lai_mosaic.getMapId({'min': lai_stats['LAI_min'], 'max': lai_stats['LAI_max'], 'palette': ["#8B4513", "#FFFF99", "#66FF66", "#004D00"]})
+    
+
 
     # Define legends for the indices
     legend = {
@@ -352,7 +453,32 @@ def get_ndvi_for_area():
             '#87CEEB': 'Moderate water content',
             '#D3D3D3': 'Low water content or exposed land',
             '#8B4513': 'Dry land or bare soil (Very low values)'
+        },
+        'SAVI':  {
+            '#006400': 'Dense vegetation (High SAVI values)',
+            '#ADFF2F': 'Moderate vegetation (Sparse or less dense vegetation)',
+            '#D2B48C': 'Bare soil or minimal vegetation',
+            '#FFA500': 'Dry areas or exposed soil (Low SAVI values)'
+        },
+        'NDMI':  {
+            '#0000FF': 'High moisture content (e.g., water bodies, wet vegetation)',
+            '#87CEEB': 'Moderate moisture (e.g., healthy vegetation)',
+            '#D3D3D3': 'Low moisture content (e.g., stressed vegetation)',
+            '#8B4513': 'Dry or barren areas (Low NDMI values)'
+        },
+        'CI':   {
+            '#006400': 'High chlorophyll content (Healthy plants)',
+            '#FFD700': 'Moderate chlorophyll content (Stressed vegetation)',
+            '#FF8C00': 'Low chlorophyll content (Unhealthy or sparse vegetation)',
+            '#FF0000': 'Minimal or no chlorophyll (Dead vegetation or bare soil)'
+        },
+        'LAI':  {
+            '#004D00': 'Dense vegetation canopy (High LAI values)',
+            '#66FF66': 'Moderate vegetation canopy',
+            '#FFFF99': 'Sparse vegetation',
+            '#8B4513': 'Minimal vegetation or bare soil'
         }
+
     }
 
     # Prepare index range for frontend display
@@ -364,14 +490,26 @@ def get_ndvi_for_area():
         'NDWI_min': ndwi_stats['NDWI_min'],
         'NDWI_max': ndwi_stats['NDWI_max'],
         'MNDWI_min': mndwi_stats['MNDWI_min'],
-        'MNDWI_max': mndwi_stats['MNDWI_max']
+        'MNDWI_max': mndwi_stats['MNDWI_max'],
+        'SAVI_min': savi_stats['SAVI_min'],
+        'SAVI_max': savi_stats['SAVI_max'],
+        'NDMI_min': ndmi_stats['NDMI_min'],
+        'NDMI_max': ndmi_stats['NDMI_max'],
+        'CI_min': ci_stats['CI_min'],
+        'CI_max': ci_stats['CI_max'],
+        'LAI_min': lai_stats['LAI_min'],
+        'LAI_max': lai_stats['LAI_max'],
     }
 
     palletes = {
         'NDVI': ['blue', 'cyan', 'yellow', 'green'],
         'EVI': ['#228B22', '#ADFF2F', '#FFFF00', '#8B4513'],
         'NDWI': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF'],
-        'MNDWI': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF']
+        'MNDWI': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF'],
+        'SAVI': ['#FFA500', '#D2B48C', '#ADFF2F', '#006400'],
+        'NDMI': ['#8B4513', '#D3D3D3', '#87CEEB', '#0000FF'],
+        'CI': ["#FF0000", "#FF8C00", "#FFD700", "#006400"],
+        'LAI': ["#8B4513", "#FFFF99", "#66FF66", "#004D00"],
     }
 
     # Return the result
@@ -380,10 +518,18 @@ def get_ndvi_for_area():
         'evi_stats': evi_stats,
         'ndwi_stats': ndwi_stats,
         'mndwi_stats': mndwi_stats,
+        'savi_stats': savi_stats,
+        'ndmi_stats': ndmi_stats,
+        'ci_stats': ci_stats,
+        'lai_stats': lai_stats,
         'ndvi_tile_url': ndvi_params['tile_fetcher'].url_format,
         'evi_tile_url': evi_params['tile_fetcher'].url_format,
         'ndwi_tile_url': ndwi_params['tile_fetcher'].url_format,
         'mndwi_tile_url': mndwi_params['tile_fetcher'].url_format,
+        'savi_tile_url': savi_params['tile_fetcher'].url_format,
+        'ndmi_tile_url': ndmi_params['tile_fetcher'].url_format,
+        'ci_tile_url': ci_params['tile_fetcher'].url_format,
+        'lai_tile_url': lai_params['tile_fetcher'].url_format,
         'legend': legend,
         'index_range': stats_response,
         'pallete': palletes
